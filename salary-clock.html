@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Salary Clock — Watch Yourself Get Paid in Real Time</title>
+<meta name="description" content="Free salary clock: see exactly how much money you earn every second at work. Track paid coffee breaks, bathroom breaks and meetings. No signup, 100% private.">
+<meta property="og:title" content="Salary Clock — you're getting paid right now">
+<meta property="og:description" content="Watch your salary roll in, live. See what your bathroom break pays. Free, no signup.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#FBFAF7">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>💸</text></svg>">
+<link rel="stylesheet" href="ledger.css" />
+<style>
+/* =================================================================
+   SALARY CLOCK — only what is unique to this tool.
+   Tokens, display type, buttons, fields, rows, footer: ledger.css.
+   ================================================================= */
+
+/* The page script (which must not change) paints a rejected salary
+   input with var(--danger); map that name onto the ledger error token. */
+:root{ --danger: var(--error); color-scheme: light dark; }
+
+html,body{ height:100% }
+body{ overflow-x:hidden }
+
+@media (max-width:520px){ :root{ --pad:18px } }
+
+/* one narrow column: this tool is a phone-shaped instrument */
+.wrap{ max-width:460px; min-height:100%; display:flex; flex-direction:column; padding-bottom:28px }
+.top button{
+  background:none; border:0; color:var(--faint); font-family:var(--mono);
+  font-size:15px; line-height:1; cursor:pointer; padding:2px 0 2px 12px;
+}
+.top button:hover{ color:var(--ink) }
+
+/* ---------- onboarding ---------- */
+.hero{ padding:32px 0 26px }
+.hero .kicker{ margin-bottom:20px }
+h1.display{ font-size:clamp(25px,6.4vw,34px) }
+.hero .lede{ margin-top:16px; font-size:15.5px }
+
+.setup{ padding:20px 18px }
+.fld{ margin-bottom:16px }
+.fld > label{
+  display:block; font-family:var(--mono); font-size:11px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--faint); margin-bottom:8px;
+}
+.row{ display:flex; gap:10px }
+.row > *{ flex:1; min-width:0 }
+.field{ padding:13px 12px }
+select.field{ cursor:pointer; padding-right:28px }
+input[type=number].field{ -moz-appearance:textfield }
+input[type=number].field::-webkit-outer-spin-button,
+input[type=number].field::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0 }
+
+.days{ display:flex; gap:6px }
+.days button{
+  flex:1; padding:10px 0; border:1px solid var(--rule); background:var(--paper);
+  color:var(--muted); font-family:var(--mono); font-size:11.5px; letter-spacing:.06em;
+  text-transform:uppercase; cursor:pointer;
+}
+.days button.on{ border-color:var(--verified); background:var(--verified-soft); color:var(--verified); font-weight:700 }
+
+.btn-wide{ width:100%; margin-top:8px; text-align:center }
+.privacy{ margin:16px 0 0; font-size:13px }
+
+/* ---------- the clock face ---------- */
+.clock{ display:none; flex-direction:column; gap:16px }
+.stage{ text-align:center; padding:32px 0 24px }
+.stage .label{
+  font-family:var(--mono); font-size:11px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--faint);
+}
+/* monospace, tabular: the digits must not jitter as they count */
+.amount{
+  font-family:var(--mono); font-weight:700; font-variant-numeric:tabular-nums;
+  font-size:clamp(38px,12.5vw,54px); line-height:1.02; letter-spacing:-.04em;
+  margin-top:12px; color:var(--verified); white-space:nowrap;
+}
+.amount .cur{ font-size:.5em; vertical-align:.34em; margin-right:3px; letter-spacing:0 }
+.amount .frac{ color:var(--verified) }
+.amount .frac .f2{ font-size:.62em; opacity:.55 }
+.rates{ margin-top:22px; text-align:left }
+
+.bar-card{ padding:15px 16px }
+.bar-top{
+  display:flex; justify-content:space-between; font-family:var(--mono); font-size:11px;
+  letter-spacing:.12em; text-transform:uppercase; color:var(--faint); margin-bottom:10px;
+}
+.bar-top b{ color:var(--ink) }
+.bar{ height:8px; background:var(--rule); overflow:hidden }
+.bar i{ display:block; height:100%; background:var(--verified) }
+.next-mile{ display:flex; align-items:center; gap:10px; margin-top:12px; font-size:13px; color:var(--muted) }
+.next-mile .emoji{ font-size:16px }
+.next-mile b{ color:var(--ink); font-weight:600 }
+
+.offclock{
+  display:none; text-align:center; border:1px dashed var(--rule);
+  padding:14px; color:var(--muted); font-size:13.5px; line-height:1.5;
+}
+.offclock b{ color:var(--verified) }
+
+.breaks .sec-label{ padding:6px 0 12px }
+.break-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px }
+.bk{
+  border:1px solid var(--rule); background:var(--paper-2); padding:14px 12px;
+  cursor:pointer; text-align:left; color:var(--ink); font-family:var(--sans);
+  transition:background .15s;
+}
+.bk:hover{ background:var(--rule-soft) }
+.bk .e{ font-size:20px }
+.bk .t{
+  display:block; font-family:var(--mono); font-weight:700; font-size:13px;
+  letter-spacing:-.01em; text-transform:uppercase; margin-top:8px;
+}
+.bk .s{ display:block; color:var(--muted); font-size:11.5px; margin-top:3px }
+
+.slogan{ margin-top:auto; padding:46px 0 20px; font-size:clamp(19px,6.6vw,30px) }
+.site-foot{ padding-bottom:6px }
+
+/* ---------- break overlay ---------- */
+.ov{ position:fixed; inset:0; z-index:40; display:none; flex-direction:column; background:var(--paper) }
+.ov .inner{
+  max-width:460px; width:100%; margin:0 auto; padding:26px var(--pad);
+  flex:1; display:flex; flex-direction:column; text-align:center;
+}
+.ov .big-e{ font-size:56px; margin-top:6vh }
+.ov h2{
+  font-family:var(--mono); font-weight:700; text-transform:uppercase;
+  font-size:clamp(19px,5.4vw,26px); line-height:1.1; letter-spacing:-.025em; margin-top:14px;
+}
+.ov .sub{ color:var(--muted); font-size:14px; margin-top:8px }
+.ov .amt{
+  font-family:var(--mono); font-weight:700; font-variant-numeric:tabular-nums;
+  font-size:clamp(40px,13vw,56px); letter-spacing:-.04em; color:var(--verified); margin-top:5vh;
+}
+.ov .amt-label{
+  font-family:var(--mono); font-size:11px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--faint); margin-top:10px;
+}
+.ov .quip{ margin-top:5vh; min-height:44px; color:var(--ink); font-size:16px; line-height:1.45; padding:0 8px }
+.ov .end{ margin-top:auto; width:100%; text-align:center }
+
+/* ---------- result / share ---------- */
+.res .inner{ justify-content:center }
+.res .card2{ padding:28px 20px }
+.res .re{ font-size:40px }
+.res h2{ font-size:19px; margin-top:12px }
+.res .ramt{
+  font-family:var(--mono); font-weight:700; font-variant-numeric:tabular-nums;
+  font-size:clamp(36px,11vw,48px); letter-spacing:-.04em; color:var(--verified); margin:16px 0 6px;
+}
+.res .rsub{ color:var(--muted); font-size:14px; line-height:1.55 }
+.res .btns{ display:flex; flex-direction:column; gap:10px; margin-top:24px }
+.res .btns .btn{ width:100%; text-align:center }
+
+/* ---------- toast + confetti layer ---------- */
+.toast{
+  position:fixed; left:50%; z-index:60; top:0;
+  background:var(--paper); border:1.5px solid var(--ink);
+  padding:11px 16px; display:flex; align-items:center; gap:11px;
+  white-space:nowrap; will-change:transform,opacity;
+}
+.toast .te{ font-size:22px }
+.toast .tt{ font-family:var(--mono); font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:.02em }
+.toast .ts{ font-family:var(--mono); font-size:12px; font-weight:700; color:var(--verified) }
+#fx{ position:fixed; inset:0; z-index:70; pointer-events:none }
+.hidden{ display:none!important }
+
+@media (min-width:700px){ .wrap{ padding-top:22px } }
+
+/* video-recording mode: clear the top caption zone */
+body.video .wrap{ padding-top:88px }
+body.video .ov .inner .big-e{ margin-top:118px }
+  /* This page's column is always narrow, so the viewport-based .hide-sm
+     breakpoint never fires — keep the document header to one line. */
+  .top .hide-sm { display: none; }
+  .top { gap: 10px; }
+</style>
+<meta property="og:image" content="/og/salary-clock.png" />
+</head>
+<body>
+<canvas id="fx"></canvas>
+
+<div class="wrap">
+  <div class="top">
+    <span><a href="/"><b>SNIP2FIELD</b></a> · SALARY CLOCK</span>
+    <span><span class="hide-sm">RUNS IN YOUR BROWSER</span><button id="gear" class="hidden" title="Edit salary">⚙︎</button></span>
+  </div>
+
+  <!-- ONBOARDING -->
+  <div class="ob" id="ob">
+    <div class="hero">
+      <div class="kicker"><span class="sq"></span> Free · no signup · nothing uploaded</div>
+      <h1 class="display">
+        <span class="line">Your boss pays you</span>
+        <span class="line"><span class="snip">every&nbsp;second</span>.</span>
+        <span class="line">Watch it happen.</span>
+      </h1>
+      <p class="lede">Enter your salary. We'll show you the money rolling in, live — including what your bathroom breaks pay.</p>
+    </div>
+
+    <div class="setup panel">
+      <div class="fld">
+        <label>I earn</label>
+        <div class="row">
+          <input class="field" type="number" id="in-salary" inputmode="decimal" placeholder="65000" min="0">
+          <select class="field" id="in-period">
+            <option value="year">per year</option>
+            <option value="month">per month</option>
+            <option value="hour">per hour</option>
+          </select>
+        </div>
+      </div>
+      <div class="fld">
+        <label>Currency</label>
+        <select class="field" id="in-cur">
+          <option value="USD">$ USD</option><option value="EUR">€ EUR</option><option value="GBP">£ GBP</option>
+          <option value="CAD">$ CAD</option><option value="AUD">$ AUD</option><option value="SGD">$ SGD</option>
+          <option value="INR">₹ INR</option><option value="PHP">₱ PHP</option><option value="TWD">NT$ TWD</option>
+          <option value="JPY">¥ JPY</option><option value="CHF">CHF</option><option value="SEK">kr SEK</option>
+        </select>
+      </div>
+      <div class="fld">
+        <label>Work hours</label>
+        <div class="row">
+          <select class="field" id="in-start"></select>
+          <select class="field" id="in-end"></select>
+        </div>
+      </div>
+      <div class="fld">
+        <label>Work days</label>
+        <div class="days" id="in-days"></div>
+      </div>
+      <button class="btn btn-wide" id="go">Start the money clock →</button>
+      <div class="callout privacy">🔒 100% private — nothing leaves your browser. No signup.</div>
+    </div>
+  </div>
+
+  <!-- CLOCK -->
+  <div class="clock" id="clock">
+    <div class="stage">
+      <div class="label" id="stage-label">You've earned today</div>
+      <div class="amount" id="amount"><span class="cur">$</span>0<span class="frac">.00<span class="f2">00</span></span></div>
+      <div class="rates rows">
+        <div class="r"><span class="k">per sec</span><span class="v" id="r-sec">–</span></div>
+        <div class="r"><span class="k">per min</span><span class="v" id="r-min">–</span></div>
+        <div class="r"><span class="k">per hour</span><span class="v" id="r-hr">–</span></div>
+      </div>
+    </div>
+
+    <div class="bar-card panel">
+      <div class="bar-top"><span>Workday</span><b id="bar-label">–</b></div>
+      <div class="bar"><i id="bar-fill" style="width:0%"></i></div>
+      <div class="next-mile" id="next-mile"><span class="emoji">🎯</span><span>Next: <b id="nm-name">–</b> in <b id="nm-eta">–</b></span></div>
+    </div>
+
+    <div class="offclock" id="offclock"></div>
+
+    <div class="breaks" id="breaks">
+      <h3 class="sec-label"><span>Take a paid break</span></h3>
+      <div class="break-grid">
+        <button class="bk" data-bk="toilet"><span class="e">🚽</span><span class="t">Toilet break</span><span class="s">the classic</span></button>
+        <button class="bk" data-bk="coffee"><span class="e">☕</span><span class="t">Coffee run</span><span class="s">essential fuel</span></button>
+        <button class="bk" data-bk="scroll"><span class="e">📱</span><span class="t">Scrolling</span><span class="s">you're doing it now</span></button>
+        <button class="bk" data-bk="meeting"><span class="e">🪑</span><span class="t">Pointless meeting</span><span class="s">could've been an email</span></button>
+      </div>
+    </div>
+
+    <div class="slogan">Nothing ever leaves<br>your device.</div>
+
+    <div class="site-foot">
+      <span>
+        <a href="/?utm_source=salaryclock&amp;utm_medium=footer" target="_blank" rel="noopener">Snip2Field</a><a href="/snip2text/?utm_source=salaryclock" target="_blank" rel="noopener">Snip2Text</a><a href="/iban-checker/?utm_source=salaryclock" target="_blank" rel="noopener">IBAN Checker</a><a href="/tools/?utm_source=salaryclock" target="_blank" rel="noopener">All tools</a>
+      </span>
+      <span>© 2026</span>
+    </div>
+  </div>
+</div>
+
+<!-- BREAK OVERLAY -->
+<div class="ov" id="break-ov">
+  <div class="inner">
+    <div class="big-e" id="bo-emoji">🚽</div>
+    <h2 id="bo-title">Getting paid to poop</h2>
+    <div class="sub">You're on the clock. The money doesn't stop.</div>
+    <div class="amt" id="bo-amt">$0.0000</div>
+    <div class="amt-label">earned this break</div>
+    <div class="quip" id="bo-quip"></div>
+    <button class="btn end" id="bo-end">I'm done — show the damage</button>
+  </div>
+</div>
+
+<!-- RESULT OVERLAY -->
+<div class="ov res" id="res-ov">
+  <div class="inner">
+    <div class="card2 panel">
+      <div class="re" id="ro-emoji">🚽</div>
+      <h2 id="ro-title">Your toilet break paid</h2>
+      <div class="ramt" id="ro-amt">$3.47</div>
+      <div class="rsub" id="ro-sub">4 min 32 sec of premium me-time,<br>fully funded by your employer.</div>
+      <div class="btns">
+        <button class="btn" id="ro-share">📸 Save the receipt</button>
+        <button class="btn btn-ghost" id="ro-back">Back to earning</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+/* ===== virtual clock (lets the video renderer step time deterministically) ===== */
+const now = () => (window.__vclock !== undefined ? window.__vclock : Date.now());
+/* fx clock: presentation time for toasts/confetti/quips — the renderer drives this on the
+   OUTPUT timeline so effects stay watchable even when money-time is fast-forwarded */
+const fnow = () => (window.__fxclock !== undefined ? window.__fxclock : now());
+let seedRng = null;
+function rng(){ // deterministic when __vclock is driven
+  if(window.__vclock !== undefined){
+    if(!seedRng){ let s = 1337; seedRng = function(){ s|=0; s = s+0x6D2B79F5|0; let t=Math.imul(s^s>>>15,1|s); t=t+Math.imul(t^t>>>7,61|t)^t; return ((t^t>>>14)>>>0)/4294967296; }; }
+    return seedRng();
+  }
+  return Math.random();
+}
+
+/* ===== state ===== */
+const LS='sc_profile_v1';
+let P=null; // {salary, period, cur, start, end, days:[1..5]}
+let breakState=null; // {type, t0}
+let toasts=[]; // {t0,emoji,title,sub}
+let bursts=[]; // confetti {t0,x,y,parts:[]}
+let milestonesHit={}; // name -> true (per day)
+let lastWholeDollar = -1, dollarPopT = -1, prevEarned = null;
+
+const MILESTONES=[
+  {at:3,    e:"🍩", n:"Donut"},
+  {at:6,    e:"🍔", n:"Big Mac meal"},
+  {at:12,   e:"🍺", n:"Beer o'clock fund"},
+  {at:18,   e:"🎬", n:"Movie ticket"},
+  {at:30,   e:"🍕", n:"Pizza night"},
+  {at:60,   e:"👟", n:"Sneaker fund started"},
+  {at:100,  e:"💯", n:"First $100 today"},
+  {at:150,  e:"🎧", n:"AirPods money"},
+  {at:250,  e:"✈️", n:"Weekend flight"},
+  {at:400,  e:"📱", n:"Half an iPhone"},
+];
+const QUIPS={
+  toilet:[ "Your boss is paying for this. Right now.",
+           "Somewhere, a spreadsheet waits. It can keep waiting.",
+           "This is the most profitable seat in the building.",
+           "Premium me-time. Company funded.",
+           "Flush when ready. The money already landed." ],
+  coffee:[ "Caffeine acquisition is billable. Apparently.",
+           "The walk to the machine? Paid. The small talk? Also paid.",
+           "Slowest barista = biggest payout. Take your time.",
+           "This latte is basically free. You earned it back in line." ],
+  scroll:[ "You're literally being paid to watch this.",
+           "One more video. It's company time anyway.",
+           "Your thumb is on the payroll.",
+           "HR calls it a 'micro-break'. We call it profit." ],
+  meeting:[ "This meeting could've been an email. A paid email.",
+            "Nod occasionally. The counter keeps running.",
+            "'Let's circle back' = more money for you.",
+            "You're not stuck in a meeting. You're farming gold." ]
+};
+const BK_META={
+  toilet:{e:"🚽", live:"Getting paid to poop", done:"Your toilet break paid"},
+  coffee:{e:"☕", live:"Getting paid for coffee", done:"Your coffee run paid"},
+  scroll:{e:"📱", live:"Getting paid to scroll", done:"Your scroll session paid"},
+  meeting:{e:"🪑", live:"Getting paid to sit there", done:"That meeting paid you"}
+};
+
+/* ===== helpers ===== */
+const $=s=>document.querySelector(s);
+const CUR_SYM={USD:"$",EUR:"€",GBP:"£",CAD:"$",AUD:"$",SGD:"$",INR:"₹",PHP:"₱",TWD:"NT$",JPY:"¥",CHF:"CHF ",SEK:"kr "};
+function sym(){ return CUR_SYM[P.cur]||"$"; }
+function fmt(v,dec){ // plain number with thousands separators
+  const neg=v<0; v=Math.abs(v);
+  const s=v.toFixed(dec===undefined?2:dec);
+  const [i,f]=s.split(".");
+  return (neg?"-":"")+i.replace(/\B(?=(\d{3})+(?!\d))/g,",")+(f?"."+f:"");
+}
+function perSecond(){
+  const daysPerWeek=P.days.length||5;
+  const hoursPerDay=Math.max(0.5,(P.end-P.start));
+  if(P.period==="hour") return P.salary/3600;
+  const yearly=P.period==="year"?P.salary:P.salary*12;
+  return yearly/(52*daysPerWeek*hoursPerDay*3600);
+}
+function dayWindow(d){ // returns {s,e} Date ms for workday of date d
+  const s=new Date(d); s.setHours(Math.floor(P.start),(P.start%1)*60,0,0);
+  const e=new Date(d); e.setHours(Math.floor(P.end),(P.end%1)*60,0,0);
+  return {s:s.getTime(), e:e.getTime()};
+}
+function isWorkday(d){ return P.days.includes(new Date(d).getDay()); }
+function earnedTodayAt(t){
+  const d=new Date(t);
+  if(!isWorkday(t)) return {v:0,state:"weekend"};
+  const {s,e}=dayWindow(d);
+  if(t<s) return {v:0,state:"before",s};
+  if(t>=e) return {v:(e-s)/1000*perSecond(),state:"after"};
+  return {v:(t-s)/1000*perSecond(),state:"on",s,e};
+}
+
+/* ===== onboarding ===== */
+const DAY_N=["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+function buildOnboarding(){
+  const st=$("#in-start"),en=$("#in-end");
+  for(let h=0;h<24;h++){ for(const m of [0,30]){
+    const v=h+m/60, label=(("0"+h).slice(-2))+":"+(("0"+m).slice(-2));
+    st.add(new Option(label+" start",v)); en.add(new Option(label+" end",v));
+  }}
+  st.value=9; en.value=17.5;
+  const dd=$("#in-days");
+  for(let i=0;i<7;i++){
+    const b=document.createElement("button"); b.type="button"; b.textContent=DAY_N[i]; b.dataset.d=i;
+    if(i>=1&&i<=5) b.classList.add("on");
+    b.onclick=()=>b.classList.toggle("on");
+    dd.appendChild(b);
+  }
+  $("#go").onclick=()=>{
+    const sal=parseFloat($("#in-salary").value);
+    if(!sal||sal<=0){ $("#in-salary").focus(); $("#in-salary").style.borderColor="var(--danger)"; return; }
+    const days=[...dd.querySelectorAll("button.on")].map(b=>+b.dataset.d);
+    P={salary:sal, period:$("#in-period").value, cur:$("#in-cur").value,
+       start:parseFloat(st.value), end:parseFloat(en.value), days:days.length?days:[1,2,3,4,5]};
+    if(P.end<=P.start) P.end=P.start+8;
+    try{ localStorage.setItem(LS,JSON.stringify(P)); }catch(e){}
+    showClock();
+  };
+}
+
+/* ===== clock screen ===== */
+function showClock(){
+  $("#ob").style.display="none";
+  $("#clock").style.display="flex";
+  $("#gear").classList.remove("hidden");
+  milestonesHit={}; lastWholeDollar=-1; prevEarned=null;
+}
+$("#gear") && ($("#gear").onclick=()=>{
+  try{ localStorage.removeItem(LS); }catch(e){}
+  location.href=location.pathname;
+});
+
+function renderAmount(el,v,big){
+  const s=v.toFixed(4), [i,f]=s.split(".");
+  el.innerHTML='<span class="cur">'+sym()+'</span>'+i.replace(/\B(?=(\d{3})+(?!\d))/g,",")+
+    '<span class="frac">.'+f.slice(0,2)+'<span class="f2">'+f.slice(2)+'</span></span>';
+}
+
+/* toast + confetti (pure functions of t for deterministic rendering) */
+function pushToast(t0,emoji,title,sub){ toasts.push({t0,emoji,title,sub}); if(toasts.length>3) toasts.shift(); }
+function burst(t0,x,y,n){
+  const parts=[];
+  for(let i=0;i<(n||26);i++){
+    const a=rng()*Math.PI*2, sp=120+rng()*260;
+    parts.push({vx:Math.cos(a)*sp, vy:Math.sin(a)*sp-160, r:3+rng()*4, hue:rng()<.7?140:52, rot:rng()*360, vr:(rng()-.5)*600});
+  }
+  bursts.push({t0,x,y,parts}); if(bursts.length>4) bursts.shift();
+}
+const fxc=$("#fx"), fctx=fxc.getContext("2d");
+function sizeFx(){ fxc.width=innerWidth*devicePixelRatio; fxc.height=innerHeight*devicePixelRatio; fctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0); }
+addEventListener("resize",sizeFx); sizeFx();
+
+function drawFx(t){
+  fctx.clearRect(0,0,innerWidth,innerHeight);
+  bursts=bursts.filter(b=>t-b.t0<1400);
+  for(const b of bursts){
+    const dt=(t-b.t0)/1000, fade=Math.max(0,1-dt/1.4);
+    for(const p of b.parts){
+      const x=b.x+p.vx*dt, y=b.y+p.vy*dt+420*dt*dt;
+      fctx.save(); fctx.translate(x,y); fctx.rotate((p.rot+p.vr*dt)*Math.PI/180);
+      fctx.globalAlpha=fade;
+      fctx.fillStyle="hsl("+p.hue+" 95% 62%)";
+      fctx.fillRect(-p.r,-p.r/2,p.r*2,p.r);
+      fctx.restore();
+    }
+  }
+  // toasts (stacked, slide+fade driven by t)
+  const els=document.querySelectorAll(".toast"); els.forEach(e=>e.remove());
+  toasts=toasts.filter(o=>t-o.t0<3600);
+  toasts.forEach((o,i)=>{
+    const dt=t-o.t0;
+    const inP=Math.min(1,dt/260), outP=Math.max(0,(dt-3100)/500);
+    const ease=1-Math.pow(1-inP,3);
+    const y=14+i*64 + (1-ease)*-70;
+    const el=document.createElement("div"); el.className="toast";
+    el.style.transform="translateX(-50%) translateY("+y+"px)";
+    el.style.opacity=String(Math.min(1,inP*1.2)*(1-outP));
+    el.innerHTML='<span class="te">'+o.emoji+'</span><span><div class="tt">'+o.title+'</div><div class="ts">'+o.sub+'</div></span>';
+    document.body.appendChild(el);
+  });
+}
+
+/* main render — everything derives from t (callable synchronously by the video renderer) */
+function renderFrame(t){
+  const ft=fnow();
+  if(P){
+    const r=perSecond();
+    const et=earnedTodayAt(t);
+    // milestone + dollar pop only while on clock
+    if(et.state==="on"){
+      for(const m of MILESTONES){
+        if(et.v>=m.at && !milestonesHit[m.n]){
+          milestonesHit[m.n]=true;
+          if(prevEarned!==null && prevEarned<m.at){ // crossed since the previous frame
+            pushToast(ft,m.e,m.n+" — earned",sym()+fmt(m.at,0)+" · today");
+            burst(ft,innerWidth/2, innerHeight*0.30);
+          }
+        }
+      }
+      prevEarned=et.v;
+      const wd=Math.floor(et.v);
+      if(wd!==lastWholeDollar){ lastWholeDollar=wd; dollarPopT=ft; }
+    }
+    // amount + pop scale
+    const amtEl=$("#amount");
+    renderAmount(amtEl,et.v);
+    const pd=ft-dollarPopT;
+    const sc=(dollarPopT>0&&pd<240)?1+0.035*Math.sin(Math.PI*pd/240):1;
+    amtEl.style.transform="scale("+sc+")";
+    // label / offclock
+    const off=$("#offclock"), stageLabel=$("#stage-label");
+    if(et.state==="on"){
+      off.style.display="none"; stageLabel.textContent="You've earned today";
+    }else{
+      off.style.display="block";
+      if(et.state==="weekend"){ off.innerHTML="🏖️ It's your day off. The clock rests. <b>You</b> should too."; stageLabel.textContent="Earned today"; }
+      else if(et.state==="before"){ const mins=Math.ceil((et.s-t)/60000); off.innerHTML="⏰ Work starts in <b>"+(mins>=60?Math.floor(mins/60)+"h "+(mins%60)+"m":mins+"m")+"</b>. The printer goes brrr soon."; stageLabel.textContent="Earned today"; }
+      else { off.innerHTML="🎉 You're <b>off the clock</b>. Today's haul is locked in."; stageLabel.textContent="You earned today"; }
+    }
+    // rates
+    $("#r-sec").textContent=sym()+fmt(r,4);
+    $("#r-min").textContent=sym()+fmt(r*60,2);
+    $("#r-hr").textContent=sym()+fmt(r*3600,2);
+    // workday bar
+    const d=new Date(t), {s,e}=dayWindow(d);
+    let prog = et.state==="on" ? (t-s)/(e-s) : (et.state==="after"?1:0);
+    prog=Math.max(0,Math.min(1,prog));
+    $("#bar-fill").style.width=(prog*100).toFixed(2)+"%";
+    $("#bar-label").textContent=et.state==="on" ? (100*prog).toFixed(1)+"% survived" : (et.state==="after"?"100% — go home":"not started");
+    // next milestone
+    const nm=MILESTONES.find(m=>m.at>et.v);
+    if(nm&&et.state==="on"){
+      const eta=(nm.at-et.v)/r;
+      $("#nm-name").textContent=nm.e+" "+nm.n;
+      $("#nm-eta").textContent=eta>3600?Math.floor(eta/3600)+"h "+Math.floor(eta%3600/60)+"m":(eta>60?Math.floor(eta/60)+"m "+Math.floor(eta%60)+"s":Math.ceil(eta)+"s");
+      $("#next-mile").style.display="flex";
+    }else{ $("#next-mile").style.display="none"; }
+    // break overlay
+    if(breakState){
+      const bv=(t-breakState.t0)/1000*r;
+      $("#bo-amt").textContent=sym()+fmt(bv,4);
+      const qs=QUIPS[breakState.type];
+      $("#bo-quip").textContent=qs[Math.floor((ft-breakState.f0)/3400)%qs.length];
+    }
+  }
+  drawFx(ft);
+}
+function tick(){ renderFrame(now()); requestAnimationFrame(tick); }
+
+/* ===== breaks ===== */
+document.querySelectorAll(".bk").forEach(b=>{
+  b.onclick=()=>{
+    const type=b.dataset.bk, m=BK_META[type];
+    breakState={type,t0:now(),f0:fnow()};
+    $("#bo-emoji").textContent=m.e; $("#bo-title").textContent=m.live;
+    $("#break-ov").style.display="flex";
+  };
+});
+$("#bo-end").onclick=()=>{
+  const t=now(), r=perSecond();
+  const secs=(t-breakState.t0)/1000, v=secs*r;
+  const m=BK_META[breakState.type];
+  $("#break-ov").style.display="none";
+  $("#ro-emoji").textContent=m.e; $("#ro-title").textContent=m.done;
+  $("#ro-amt").textContent=sym()+fmt(v,2);
+  const mm=Math.floor(secs/60), ss=Math.round(secs%60);
+  const dur=(mm>0?mm+" min ":"")+ss+" sec";
+  const subs={
+    toilet:dur+" of premium me-time,<br>fully funded by your employer.",
+    coffee:dur+" of caffeine logistics,<br>proudly sponsored by payroll.",
+    scroll:dur+" of quality scrolling,<br>invoiced to the company.",
+    meeting:dur+" of nodding thoughtfully,<br>billed at full rate."
+  };
+  $("#ro-sub").innerHTML=subs[breakState.type];
+  window.__lastBreak={type:breakState.type, v, dur, e:m.e, done:m.done};
+  breakState=null;
+  $("#res-ov").style.display="flex";
+  burst(fnow(),innerWidth/2,innerHeight*0.35,34);
+};
+$("#ro-back").onclick=()=>{ $("#res-ov").style.display="none"; };
+
+/* ===== share card (1080x1920 PNG) ===== */
+$("#ro-share").onclick=()=>{
+  const b=window.__lastBreak; if(!b) return;
+  const W=1080, H=1920;
+  const c=document.createElement("canvas"); c.width=W; c.height=H;
+  const x=c.getContext("2d");
+  const MONO="Consolas, Menlo, monospace", SANS="'Segoe UI', -apple-system, sans-serif";
+  const PAPER="#FBFAF7", INK="#16130F", MUTED="#6B6459", FAINT="#9A9287",
+        RULE="#E3DED3", SOFT="#EFEBE3", GREEN="#0E7C5A", ACCENT="#17457A";
+  const track=(v)=>{ try{ x.letterSpacing=v; }catch(e){} };
+
+  x.fillStyle=PAPER; x.fillRect(0,0,W,H);
+  // the receipt itself, sitting on the desk with a hard offset shadow
+  const L=80, R=W-80, T=250, B=1660;
+  x.fillStyle=SOFT; x.fillRect(L+14,T+14,R-L,B-T);
+  x.fillStyle="#FFFFFF"; x.fillRect(L,T,R-L,B-T);
+  x.strokeStyle=RULE; x.lineWidth=2; x.strokeRect(L,T,R-L,B-T);
+  x.textAlign="center";
+
+  track("8px");
+  x.fillStyle=FAINT; x.font="600 34px "+MONO;
+  x.fillText("OFFICIAL RECEIPT", W/2, T+92);
+  track("0px");
+
+  x.strokeStyle=RULE; x.lineWidth=2;
+  x.beginPath(); x.moveTo(L+56,T+134); x.lineTo(R-56,T+134); x.stroke();
+
+  x.font="180px 'Segoe UI Emoji', sans-serif";
+  x.fillText(b.e, W/2, T+346);
+
+  x.fillStyle=INK; x.font="700 56px "+MONO;
+  x.fillText(b.done, W/2, T+452);
+
+  // the amount, wrapped in the snip selection rectangle (the brand device)
+  const amount=sym()+fmt(b.v,2);
+  x.fillStyle=GREEN; x.font="700 168px "+MONO;
+  const aw=x.measureText(amount).width, ay=T+650;
+  x.fillText(amount, W/2, ay);
+  x.strokeStyle=ACCENT; x.lineWidth=4; x.setLineDash([14,11]);
+  const bx=W/2-aw/2-28, by=ay-138, bw=aw+56, bh=182;
+  x.strokeRect(bx,by,bw,bh);
+  x.setLineDash([]);
+  x.fillStyle=ACCENT; x.fillRect(bx+bw-9, by+bh-9, 18, 18);
+
+  x.fillStyle=MUTED; x.font="400 42px "+SANS;
+  x.fillText(b.dur+" — paid in full by my employer", W/2, T+780);
+
+  // tear line
+  x.strokeStyle=RULE; x.lineWidth=2; x.setLineDash([10,12]);
+  x.beginPath(); x.moveTo(L+56,T+930); x.lineTo(R-56,T+930); x.stroke();
+  x.setLineDash([]);
+
+  x.fillStyle=INK; x.font="700 58px "+MONO;
+  x.fillText("THE MONEY", W/2, T+1070);
+  x.fillText("NEVER STOPS.", W/2, T+1144);
+
+  track("4px");
+  x.fillStyle=ACCENT; x.font="600 40px "+MONO;
+  x.fillText("snip2field.netlify.app/clock", W/2, T+1268);
+  x.fillStyle=FAINT; x.font="400 32px "+MONO;
+  x.fillText("FREE · NO SIGNUP · NOTHING UPLOADED", W/2, T+1334);
+  track("0px");
+
+  track("8px");
+  x.fillStyle=FAINT; x.font="600 30px "+MONO;
+  x.fillText("NOTHING EVER LEAVES YOUR DEVICE", W/2, B+140);
+  track("0px");
+
+  const a=document.createElement("a");
+  a.download="salary-clock-receipt.png"; a.href=c.toDataURL("image/png"); a.click();
+};
+
+/* ===== boot ===== */
+buildOnboarding();
+const q=new URLSearchParams(location.search);
+if(q.has("video")) document.body.classList.add("video");
+if(q.has("demo")){
+  P={salary:+q.get("demo")||85000, period:q.get("period")||"year", cur:q.get("cur")||"USD",
+     start:+(q.get("start")||9), end:+(q.get("end")||17.5), days:[1,2,3,4,5]};
+  showClock();
+}else{
+  try{
+    const saved=localStorage.getItem(LS);
+    if(saved){ P=JSON.parse(saved); showClock(); }
+  }catch(e){}
+}
+/* expose small hooks for the video renderer */
+window.__sc={ get P(){return P}, set P(v){P=v; showClock();}, openBreak:(type)=>{document.querySelector('[data-bk="'+type+'"]').click();}, endBreak:()=>$("#bo-end").click(), showClock };
+window.__renderFrame=(t)=>{ window.__vclock=t; renderFrame(t); };
+requestAnimationFrame(tick);
+})();
+</script>
+<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "3fe3f536ab224ac4aae3b10aca5ad025"}'></script><!-- End Cloudflare Web Analytics -->
+</body>
+</html>

@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>IBAN Checker — Validate Any IBAN Instantly, Nothing Uploaded</title>
+<meta name="description" content="Paste an IBAN and check it against the official ISO 13616 mod-97 checksum. See the country, bank code and account number — and exactly why an invalid IBAN failed. Runs 100% in your browser." />
+<link rel="canonical" href="https://snip2field.netlify.app/iban-checker/" />
+<link rel="alternate" hreflang="en" href="https://snip2field.netlify.app/iban-checker/" />
+<link rel="alternate" hreflang="de" href="https://snip2field.netlify.app/de/iban-pruefen/" />
+<link rel="alternate" hreflang="x-default" href="https://snip2field.netlify.app/iban-checker/" />
+<link rel="icon" type="image/png" href="/favicon.png" />
+<meta property="og:title" content="IBAN Checker — Validate Any IBAN Instantly, Nothing Uploaded" />
+<meta property="og:description" content="Paste an IBAN and check it against the official ISO 13616 mod-97 checksum. See the country, bank code and account number — and exactly why an invalid IBAN failed. Runs 100% in your browser." />
+<meta property="og:image" content="/og/iban-checker.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebApplication",
+      "name": "IBAN Checker",
+      "url": "https://snip2field.netlify.app/iban-checker/",
+      "applicationCategory": "FinanceApplication",
+      "operatingSystem": "Any (runs in the browser)",
+      "description": "Paste an IBAN and check it against the official ISO 13616 mod-97 checksum. See the country, bank code and account number — and exactly why an invalid IBAN failed. Runs 100% in your browser.",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "What makes an IBAN valid?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Three things: the country code must exist, the length must match that country (Germany 22, France 27, Netherlands 18, and so on), and the mod-97 checksum must come out to 1. This page checks all three."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Does a valid IBAN mean the account exists?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "No. The checksum proves the number was typed correctly — not that anyone holds that account. Only the receiving bank knows whether an account is real, which is what the EU's Verification of Payee check does at transfer time."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is it safe to paste my IBAN here?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. The check is arithmetic running in your browser; nothing is sent anywhere and nothing is stored. You can turn off your internet connection and it still works."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why does my IBAN fail even though I copied it?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Most often the copy picked up a stray character, or the source itself is wrong. If the checksum fails, one digit is usually wrong or two are transposed — the error message above tells you which check failed."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I check an IBAN from a scanned PDF?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Not by copying — a scanned invoice is an image, so there's no text to select. You'd retype it, or use a tool like Snip2Field that reads the region on screen and verifies the checksum for you."
+          }
+        }
+      ]
+    }
+  ]
+}
+</script>
+<link rel="stylesheet" href="ledger.css" />
+<style>
+  .top .lang a { margin-left: 12px; }
+  .top .lang a.on { color: var(--ink); font-weight: 700; }
+  .hero { padding: 64px 0 40px; }
+  .hero .kicker { margin-bottom: 24px; }
+  .hero .lede { margin-top: 26px; }
+
+  .tool { border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); padding: 30px 0; }
+  .row { display: flex; flex-wrap: wrap; gap: 9px; align-items: center; margin-top: 13px; }
+  .samples { margin-top: 15px; font-family: var(--mono); font-size: 12.5px; color: var(--faint);
+             letter-spacing: .06em; }
+  .samples b { color: var(--muted); font-weight: 400; text-transform: uppercase;
+               letter-spacing: .14em; font-size: 11px; margin-right: 8px; }
+  .samples button { background: none; border: none; color: var(--accent); cursor: pointer;
+                    font-family: var(--mono); font-size: 12.5px; padding: 2px 4px; }
+  .samples button:hover { text-decoration: underline; text-underline-offset: 3px; }
+
+  .result { display: none; margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--rule); }
+  .result.show { display: block; }
+  .formatted { font-family: var(--mono); font-size: clamp(16px, 2.6vw, 22px); letter-spacing: .08em;
+               margin-top: 16px; word-break: break-all; }
+  .rows { margin-top: 18px; }
+
+  section.block { padding: 34px 0; border-bottom: 1px solid var(--rule); max-width: 62ch; }
+  section.block h2 { font-family: var(--mono); font-size: clamp(17px, 2.4vw, 22px); font-weight: 700;
+                     text-transform: uppercase; letter-spacing: -.02em; margin-bottom: 10px; }
+  section.block p { color: var(--muted); font-size: 15.5px; }
+
+  .cta { padding: 34px 0; border-bottom: 1px solid var(--rule); }
+  .cta .tag { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+              color: var(--faint); display: block; margin-bottom: 11px; }
+  .cta h2 { font-family: var(--mono); font-size: clamp(18px, 2.6vw, 25px); font-weight: 700;
+            text-transform: uppercase; letter-spacing: -.02em; margin-bottom: 10px; }
+  .cta p { color: var(--muted); font-size: 15.5px; max-width: 58ch; }
+  .cta .btn { margin-top: 18px; }
+  .cta .fine { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em; text-transform: uppercase;
+               color: var(--faint); margin-top: 13px; }
+
+  .faq-wrap { padding: 34px 0 10px; max-width: 62ch; }
+  .faq-wrap h2 { font-family: var(--mono); font-size: clamp(17px, 2.4vw, 22px); font-weight: 700;
+                 text-transform: uppercase; letter-spacing: -.02em; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap-narrow">
+
+  <div class="top">
+    <span><a href="/"><b>SNIP2FIELD</b></a> · IBAN Checker</span>
+    <span class="lang"><a href="https://snip2field.netlify.app/iban-checker/" class="on">EN</a><a href="https://snip2field.netlify.app/de/iban-pruefen/">DE</a></span>
+  </div>
+
+  <div class="hero">
+    <div class="kicker"><span class="sq"></span> 100% in-browser · ISO 13616</div>
+    <h1 class="display"><span class="line">Check an IBAN</span><span class="line">without sending it <span class="snip">anywhere</span></span></h1>
+    <p class="lede">Paste it below. The check runs in your browser using the official ISO&nbsp;13616 mod-97 algorithm — your bank details never leave this page.</p>
+  </div>
+
+  <div class="tool">
+    <label for="iban" class="sr-only">Check an IBAN</label>
+    <input id="iban" class="field" type="text" autocomplete="off" autocapitalize="characters"
+           spellcheck="false" inputmode="latin" placeholder="e.g. DE89 3704 0044 0532 0130 00" />
+    <div class="row">
+      <button class="btn btn-ghost btn-sm" id="paste">Paste from clipboard</button>
+      <button class="btn btn-ghost btn-sm" id="clear">Clear</button>
+      <button class="btn btn-ghost btn-sm" id="copy" style="display:none">Copy formatted</button>
+    </div>
+    <div class="samples"><b>Try one:</b><span id="samples"></span></div>
+
+    <div class="result" id="result">
+      <div class="verdict" id="verdict"><span class="mark"></span><span id="vtext"></span></div>
+      <div class="reason" id="reason" style="display:none"></div>
+      <div class="formatted data" id="formatted"></div>
+      <div class="rows" id="fields"></div>
+    </div>
+  </div>
+
+  <section class="block">
+    <h2>How the check works</h2>
+    <p>An IBAN carries its own proof. The first four characters move to the end, every letter becomes a number (A=10 … Z=35), and the resulting long number is divided by 97. A genuine IBAN always leaves a remainder of exactly 1. That's why a single mistyped digit is caught immediately — and why this page needs no server to tell you.</p>
+  </section>
+
+  <section class="block">
+    <h2>Length differs by country</h2>
+    <p>There is no single IBAN length: Norway uses 15 characters, Germany 22, France 27, Poland 28. The checker knows every country's length, and each country has its own page showing what each part of its IBAN means. <a href="/iban-format/">IBAN format by country →</a></p>
+  </section>
+
+  <section class="block">
+    <h2>Nothing is uploaded</h2>
+    <p>Your IBAN is never sent anywhere: no request carries it, nothing is stored, no account is needed. The validation is a few lines of arithmetic running on your machine — disconnect from the internet and this page still works. The site counts anonymous page views, and that is all.</p>
+  </section>
+
+  <div class="cta">
+    <span class="tag">Reading IBANs off invoices?</span>
+    <h2>This same check, on your desktop</h2>
+    <p>Snip2Field puts it where the typing actually happens: press a hotkey, drag a box over the IBAN on any invoice or PDF, and it reads the field, runs this exact checksum, and copies it — ready to paste into your books or a transfer form. Fully offline, like this page.</p>
+    <a class="btn" href="/?utm_source=iban-checker&utm_medium=cta">See Snip2Field</a>
+    <div class="fine">Windows · $14 once · no subscription</div>
+  </div>
+
+  <div class="faq-wrap">
+    <h2>Questions</h2>
+    <details><summary>What makes an IBAN valid?</summary><p>Three things: the country code must exist, the length must match that country (Germany 22, France 27, Netherlands 18, and so on), and the mod-97 checksum must come out to 1. This page checks all three.</p></details>
+    <details><summary>Does a valid IBAN mean the account exists?</summary><p>No. The checksum proves the number was typed correctly — not that anyone holds that account. Only the receiving bank knows whether an account is real, which is what the EU's Verification of Payee check does at transfer time.</p></details>
+    <details><summary>Is it safe to paste my IBAN here?</summary><p>Yes. The check is arithmetic running in your browser; nothing is sent anywhere and nothing is stored. You can turn off your internet connection and it still works.</p></details>
+    <details><summary>Why does my IBAN fail even though I copied it?</summary><p>Most often the copy picked up a stray character, or the source itself is wrong. If the checksum fails, one digit is usually wrong or two are transposed — the error message above tells you which check failed.</p></details>
+    <details><summary>Can I check an IBAN from a scanned PDF?</summary><p>Not by copying — a scanned invoice is an image, so there's no text to select. You'd retype it, or use a tool like Snip2Field that reads the region on screen and verifies the checksum for you.</p></details>
+  </div>
+
+  <div class="slogan">Nothing ever leaves<br>your device.</div>
+
+  <div class="site-foot">
+    <span>
+      <a href="/">Home</a><a href="/tools/">All tools</a>
+      <span class="tools-strip">Free tools:
+        <a href="/snip2text/">Snip2Text</a><a href="/salary-clock/">Salary Clock</a></span>
+    </span>
+    <span>© 2026</span>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var LEN = {"AD": 24, "AE": 23, "AL": 28, "AT": 20, "AZ": 28, "BA": 20, "BE": 16, "BG": 22, "BH": 22, "BI": 27, "BR": 29, "BY": 28, "CH": 21, "CR": 22, "CY": 28, "CZ": 24, "DE": 22, "DJ": 27, "DK": 18, "DO": 28, "EE": 20, "EG": 29, "ES": 24, "FI": 18, "FK": 18, "FO": 18, "FR": 27, "GB": 22, "GE": 22, "GI": 23, "GL": 18, "GR": 27, "GT": 28, "HN": 28, "HR": 21, "HU": 28, "IE": 22, "IL": 23, "IQ": 23, "IS": 26, "IT": 27, "JO": 30, "KW": 30, "KZ": 20, "LB": 28, "LC": 32, "LI": 21, "LT": 20, "LU": 20, "LV": 21, "LY": 25, "MC": 27, "MD": 24, "ME": 22, "MK": 19, "MN": 20, "MR": 27, "MT": 31, "MU": 30, "NI": 28, "NL": 18, "NO": 15, "OM": 23, "PK": 24, "PL": 28, "PS": 29, "PT": 25, "QA": 29, "RO": 24, "RS": 22, "RU": 33, "SA": 24, "SC": 31, "SD": 18, "SE": 24, "SI": 19, "SK": 24, "SM": 27, "SO": 23, "ST": 25, "SV": 28, "TL": 23, "TN": 24, "TR": 26, "UA": 29, "VA": 22, "VG": 24, "XK": 20};
+  var STRUCT = {"AT": [["bank", 0, 5], ["account", 5, 16]], "BE": [["bank", 0, 3], ["account", 3, 10], ["natcheck", 10, 12]], "BG": [["bank", 0, 4], ["branch", 4, 8], ["type", 8, 10], ["account", 10, 18]], "CH": [["bank", 0, 5], ["account", 5, 17]], "CZ": [["bank", 0, 4], ["account", 4, 20]], "DE": [["bank", 0, 8], ["account", 8, 18]], "DK": [["bank", 0, 4], ["account", 4, 14]], "EE": [["bank", 0, 2], ["account", 2, 16]], "ES": [["bank", 0, 4], ["branch", 4, 8], ["natcheck", 8, 10], ["account", 10, 20]], "FI": [["bank", 0, 6], ["account", 6, 14]], "FR": [["bank", 0, 5], ["branch", 5, 10], ["account", 10, 21], ["natcheck", 21, 23]], "GB": [["bank", 0, 4], ["branch", 4, 10], ["account", 10, 18]], "GR": [["bank", 0, 3], ["branch", 3, 7], ["account", 7, 23]], "HR": [["bank", 0, 7], ["account", 7, 17]], "HU": [["bank", 0, 3], ["branch", 3, 7], ["account", 7, 24]], "IE": [["bank", 0, 4], ["branch", 4, 10], ["account", 10, 18]], "IT": [["natcheck", 0, 1], ["bank", 1, 6], ["branch", 6, 11], ["account", 11, 23]], "LT": [["bank", 0, 5], ["account", 5, 16]], "LU": [["bank", 0, 3], ["account", 3, 16]], "LV": [["bank", 0, 4], ["account", 4, 17]], "NL": [["bank", 0, 4], ["account", 4, 14]], "NO": [["bank", 0, 4], ["account", 4, 11]], "PL": [["bank", 0, 8], ["account", 8, 24]], "PT": [["bank", 0, 4], ["branch", 4, 8], ["account", 8, 19], ["natcheck", 19, 21]], "RO": [["bank", 0, 4], ["account", 4, 20]], "SE": [["bank", 0, 3], ["account", 3, 20]], "SI": [["bank", 0, 5], ["account", 5, 15]], "SK": [["bank", 0, 4], ["account", 4, 20]]};
+  var T = {"valid": "Valid IBAN", "invalid": "Not a valid IBAN", "why": "Why", "copy": "Copy formatted", "copied": "Copied", "chars": "characters", "e_short": "Too short to be an IBAN.", "e_country": "“%s” is not a known IBAN country code.", "e_len": "%(cc)s IBANs are %(want)d characters long — this one has %(got)d.", "e_chars": "Contains characters that can't appear in an IBAN (letters A–Z and digits only).", "e_checksum": "The checksum doesn't match. Usually one digit is wrong or two digits are swapped.", "e_checkdigits": "The two check digits after the country code must be numbers.", "f_country": "Country", "f_check": "Check digits", "f_bank": "Bank code", "f_branch": "Branch code", "f_account": "Account number", "f_natcheck": "National check", "f_type": "Account type", "f_rest": "Account data", "f_length": "Length"};
+  var SAMPLES = ["DE89370400440532013000", "FR1420041010050500013M02606", "NL91ABNA0417164300"];
+
+  var input = document.getElementById("iban");
+  var result = document.getElementById("result");
+  var verdict = document.getElementById("verdict");
+  var vtext = document.getElementById("vtext");
+  var reason = document.getElementById("reason");
+  var formatted = document.getElementById("formatted");
+  var fields = document.getElementById("fields");
+  var copyBtn = document.getElementById("copy");
+  var lang = document.documentElement.lang;
+
+  function clean(s) { return (s || "").toUpperCase().replace(/[\s\u00A0\-\.]/g, ""); }
+  function group(s) { return s.replace(/(.{4})/g, "$1 ").trim(); }
+
+  function countryName(cc) {
+    try {
+      var n = new Intl.DisplayNames([lang], { type: "region" }).of(cc);
+      if (n && n !== cc) return n + " (" + cc + ")";
+    } catch (e) {}
+    return cc;
+  }
+
+  // ISO 13616 mod-97: move first 4 chars to the end, letters -> numbers, mod 97 must be 1.
+  function mod97(iban) {
+    var s = iban.slice(4) + iban.slice(0, 4), r = 0;
+    for (var i = 0; i < s.length; i++) {
+      var c = s.charCodeAt(i), v;
+      if (c >= 48 && c <= 57) v = String(c - 48);
+      else if (c >= 65 && c <= 90) v = String(c - 55);
+      else return -1;
+      for (var j = 0; j < v.length; j++) r = (r * 10 + (v.charCodeAt(j) - 48)) % 97;
+    }
+    return r;
+  }
+
+  function validate(raw) {
+    var v = clean(raw);
+    if (v.length < 5) return { state: "empty" };
+    if (!/^[A-Z0-9]+$/.test(v)) return { state: "bad", why: T.e_chars, iban: v };
+    var cc = v.slice(0, 2);
+    if (!/^[A-Z]{2}$/.test(cc) || !LEN[cc])
+      return { state: "bad", why: T.e_country.replace("%s", v.slice(0, 2)), iban: v };
+    if (!/^[0-9]{2}$/.test(v.slice(2, 4)))
+      return { state: "bad", why: T.e_checkdigits, iban: v, cc: cc };
+    if (v.length !== LEN[cc])
+      return { state: "bad", cc: cc, iban: v,
+               why: T.e_len.replace("%(cc)s", cc).replace("%(want)d", LEN[cc]).replace("%(got)d", v.length) };
+    if (mod97(v) !== 1) return { state: "bad", why: T.e_checksum, iban: v, cc: cc };
+    return { state: "ok", iban: v, cc: cc };
+  }
+
+  function row(k, val) {
+    return '<div class="r"><span class="k">' + k + '</span><span class="v">' + val + "</span></div>";
+  }
+
+  function render(r) {
+    if (r.state === "empty") {
+      result.className = "result";
+      input.className = "field";
+      copyBtn.style.display = "none";
+      return;
+    }
+    var ok = r.state === "ok";
+    result.className = "result show";
+    input.className = ok ? "field ok" : "field bad";
+    verdict.className = "verdict " + (ok ? "v-ok" : "v-bad");
+    verdict.querySelector(".mark").textContent = ok ? "✓" : "!";
+    vtext.textContent = ok ? T.valid : T.invalid;
+
+    if (ok) {
+      reason.style.display = "none";
+      formatted.textContent = group(r.iban);
+      copyBtn.style.display = "";
+      copyBtn.textContent = T.copy;
+    } else {
+      reason.style.display = "";
+      reason.innerHTML = "<b>" + T.why + ":</b> " + r.why;
+      formatted.textContent = "";
+      copyBtn.style.display = "none";
+    }
+
+    var html = "";
+    if (r.cc) html += row(T.f_country, countryName(r.cc));
+    if (ok || (r.cc && r.iban.length === LEN[r.cc])) {
+      html += row(T.f_check, r.iban.slice(2, 4));
+      var bban = r.iban.slice(4), st = STRUCT[r.cc];
+      if (st) {
+        for (var i = 0; i < st.length; i++) {
+          var part = bban.slice(st[i][1], st[i][2]);
+          if (part) html += row(T["f_" + st[i][0]], part);
+        }
+      } else if (bban) {
+        html += row(T.f_rest, bban);
+      }
+    }
+    html += row(T.f_length, r.iban.length + " " + T.chars);
+    fields.innerHTML = html;
+  }
+
+  function check() { render(validate(input.value)); }
+
+  input.addEventListener("input", check);
+  document.getElementById("clear").addEventListener("click", function () {
+    input.value = ""; input.focus(); check();
+  });
+  document.getElementById("paste").addEventListener("click", function () {
+    if (!navigator.clipboard || !navigator.clipboard.readText) { input.focus(); return; }
+    navigator.clipboard.readText().then(function (t) { input.value = t; check(); })
+      .catch(function () { input.focus(); });
+  });
+  copyBtn.addEventListener("click", function () {
+    var text = formatted.textContent;
+    var done = function () { copyBtn.textContent = T.copied; setTimeout(function(){ copyBtn.textContent = T.copy; }, 1600); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, function(){});
+    else { var ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta);
+           ta.select(); try { document.execCommand("copy"); done(); } catch (e) {} document.body.removeChild(ta); }
+  });
+
+  var box = document.getElementById("samples");
+  SAMPLES.forEach(function (s, i) {
+    var b = document.createElement("button");
+    b.type = "button";
+    b.textContent = s.slice(0, 2) + "…" + s.slice(-4);
+    b.title = group(s);
+    b.addEventListener("click", function () { input.value = group(s); check(); input.focus(); });
+    box.appendChild(b);
+    if (i < SAMPLES.length - 1) box.appendChild(document.createTextNode(" "));
+  });
+
+  input.focus();
+})();
+</script>
+<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "3fe3f536ab224ac4aae3b10aca5ad025"}'></script><!-- End Cloudflare Web Analytics -->
+</body>
+</html>

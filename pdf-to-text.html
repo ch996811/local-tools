@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PDF to Text — Scanned PDF OCR in Your Browser, Nothing Uploaded</title>
+<meta name="description" content="Drop a PDF and get the text out. Pages with real text are read instantly; scanned pages are run through OCR — all inside your browser, so the document is never uploaded. Free, no signup, no page limit." />
+<link rel="canonical" href="https://snip2field.netlify.app/pdf-ocr/" />
+<link rel="icon" type="image/png" href="/favicon.png" />
+<meta name="theme-color" content="#FBFAF7" />
+<meta property="og:title" content="PDF to Text — Scanned PDF OCR in Your Browser, Nothing Uploaded" />
+<meta property="og:description" content="Drop a PDF and get the text out. Scanned pages are OCR'd in your browser — the file is never uploaded. Free, no signup." />
+<meta property="og:image" content="/og/pdf-ocr.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebApplication",
+      "name": "PDF to Text",
+      "url": "https://snip2field.netlify.app/pdf-ocr/",
+      "applicationCategory": "UtilitiesApplication",
+      "operatingSystem": "Any (runs in the browser)",
+      "description": "Extract text from any PDF in the browser. Pages with an existing text layer are read directly; image-only scanned pages are processed with optical character recognition. The file is never uploaded.",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is my PDF uploaded anywhere?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No. The file is opened and processed by your own browser. It is never sent to a server, and nothing about its contents is stored. The page downloads its recognition engine from a public code CDN the first time you use it, and that is the only network request involved." }
+        },
+        {
+          "@type": "Question",
+          "name": "Why can't I select the text in my PDF?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Because the page is an image rather than text. Scanned, photographed or image-exported PDFs contain pixels that look like letters but carry no characters to select. Optical character recognition turns those pixels back into text, which is what this tool does for pages that need it." }
+        },
+        {
+          "@type": "Question",
+          "name": "How accurate is the recognition?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Pages that already contain real text are extracted exactly, with no recognition involved at all. For scanned pages, accuracy depends on the scan: clean 300 dpi text is usually very good, while low-resolution photos, unusual fonts and handwriting are much less reliable. Always check numbers against the original." }
+        },
+        {
+          "@type": "Question",
+          "name": "Is there a page limit or a watermark?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No limit and no watermark. Because the work happens on your own machine there is nothing to meter. Very long scanned documents simply take longer, since each image page has to be recognised one at a time." }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it work offline?",
+          "acceptedAnswer": { "@type": "Answer", "text": "After the first run, usually yes — the browser caches the recognition engine. The first visit needs a connection to fetch it." }
+        }
+      ]
+    }
+  ]
+}
+</script>
+<link rel="stylesheet" href="ledger.css" />
+<style>
+  .hero { padding: 56px 0 34px; }
+  .hero .kicker { margin-bottom: 22px; }
+  .hero .lede { margin-top: 24px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 24px;
+           font-family: var(--mono); font-size: 11.5px; letter-spacing: .08em;
+           text-transform: uppercase; color: var(--muted); }
+  .chips span::before { content: "\2713 "; color: var(--verified); font-weight: 700; }
+
+  .stage { border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+           padding: 30px 0; margin-top: 34px; }
+  .cap { font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+         text-transform: uppercase; color: var(--faint); margin-bottom: 14px;
+         display: flex; justify-content: space-between; gap: 12px; }
+
+  #drop { border: 2px dashed var(--rule); background: var(--paper-2); padding: 46px 24px;
+          text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+  #drop:hover, #drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  #drop .big { font-family: var(--mono); font-size: 17px; font-weight: 700; text-transform: uppercase;
+               letter-spacing: -.01em; margin-bottom: 8px; }
+  #drop .sm { color: var(--muted); font-size: 14px; }
+  #drop .sm b { font-family: var(--mono); font-size: 12px; border: 1px solid var(--rule);
+                padding: 1px 6px; color: var(--ink); font-weight: 400; }
+
+  .work { display: none; }
+  .work.on { display: block; }
+  .bar { height: 3px; background: var(--rule); margin: 18px 0 12px; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s; }
+  .pstat { display: flex; justify-content: space-between; gap: 12px; font-family: var(--mono);
+           font-size: 12.5px; letter-spacing: .04em; color: var(--muted); }
+  .pages { margin-top: 18px; border: 1px solid var(--rule); max-height: 190px; overflow-y: auto; }
+  .pg { display: flex; justify-content: space-between; gap: 12px; padding: 8px 13px;
+        font-family: var(--mono); font-size: 12.5px; border-bottom: 1px solid var(--rule-soft); }
+  .pg:last-child { border-bottom: none; }
+  .pg .n { color: var(--faint); }
+  .pg .how { color: var(--muted); }
+  .pg .how.text { color: var(--verified); }
+  .pg .how.ocr { color: var(--accent); }
+
+  .res { display: none; }
+  .res.on { display: block; }
+  #out { width: 100%; min-height: 300px; resize: vertical; font-family: var(--mono);
+         font-size: 13.5px; line-height: 1.7; padding: 16px; letter-spacing: 0; }
+  .actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 14px; }
+  .summary { font-family: var(--mono); font-size: 12px; letter-spacing: .08em;
+             text-transform: uppercase; color: var(--faint); margin-top: 14px; }
+
+  section.block { padding: 32px 0; border-bottom: 1px solid var(--rule); max-width: 64ch; }
+  section.block h2 { font-family: var(--mono); font-size: clamp(17px, 2.4vw, 22px); font-weight: 700;
+                     text-transform: uppercase; letter-spacing: -.02em; margin-bottom: 10px; }
+  section.block p { color: var(--muted); font-size: 15.5px; }
+  section.block p + p { margin-top: 12px; }
+  .cta { padding: 34px 0; border-bottom: 1px solid var(--rule); }
+  .cta .tag { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+              color: var(--faint); display: block; margin-bottom: 11px; }
+  .cta h2 { font-family: var(--mono); font-size: clamp(18px, 2.6vw, 25px); font-weight: 700;
+            text-transform: uppercase; letter-spacing: -.02em; margin-bottom: 10px; }
+  .cta p { color: var(--muted); font-size: 15.5px; max-width: 58ch; }
+  .cta .btn { margin-top: 16px; }
+  .cta .fine { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em;
+               text-transform: uppercase; color: var(--faint); margin-top: 12px; }
+  .faq-wrap { padding: 32px 0 10px; max-width: 64ch; }
+  .faq-wrap h2 { font-family: var(--mono); font-size: clamp(17px, 2.4vw, 22px); font-weight: 700;
+                 text-transform: uppercase; letter-spacing: -.02em; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap-narrow">
+
+  <div class="top">
+    <span><a href="/"><b>SNIP2FIELD</b></a> · PDF TO TEXT</span>
+    <span class="hide-sm">FREE · NOTHING UPLOADED</span>
+  </div>
+
+  <div class="hero">
+    <div class="kicker"><span class="sq"></span> Free · no signup · no page limit</div>
+    <h1 class="display">
+      <span class="line">Scanned PDF</span>
+      <span class="line">to text, in your</span>
+      <span class="line"><span class="snip">browser</span>.</span>
+    </h1>
+    <p class="lede">Drop a PDF and get the text out. Pages that already contain text are read instantly and exactly; only the scanned, image-only pages go through recognition. <b>The file never leaves your machine.</b></p>
+    <div class="chips">
+      <span>Nothing uploaded</span>
+      <span>No signup</span>
+      <span>No watermark</span>
+      <span>No page limit</span>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="cap"><span>Your PDF</span><span>Not uploaded</span></div>
+
+    <div id="drop" role="button" tabindex="0" aria-label="Choose or drop a PDF file">
+      <div class="big">Drop a PDF, or tap to choose</div>
+      <div class="sm">Everything happens on this device — the file is never sent anywhere</div>
+    </div>
+    <input id="file" type="file" accept="application/pdf,.pdf" hidden />
+
+    <div class="work" id="work">
+      <div class="bar"><i id="fill"></i></div>
+      <div class="pstat"><span id="msg">Opening…</span><span id="pct">0%</span></div>
+      <div class="pages" id="pages"></div>
+    </div>
+
+    <div class="res" id="res">
+      <div class="cap"><span>Extracted text</span><span id="meta"></span></div>
+      <label for="out" class="sr-only">Extracted text</label>
+      <textarea id="out" class="field" spellcheck="false"></textarea>
+      <div class="actions">
+        <button class="btn" id="copy">Copy text</button>
+        <button class="btn btn-ghost" id="save">Download .txt</button>
+        <button class="btn btn-ghost" id="again">New PDF</button>
+      </div>
+      <div class="summary" id="summary"></div>
+    </div>
+  </div>
+
+  <section class="block">
+    <h2>Why some pages are instant and others are not</h2>
+    <p>A PDF can hold text in two completely different ways. If it was exported from a word
+    processor or an accounting system, the characters are really in the file — those pages are
+    read out directly, character for character, with no recognition and no error.</p>
+    <p>If the page was scanned or photographed, it is just a picture of writing. There are no
+    characters to read, which is why you cannot select the text. For those pages the scan is
+    lifted straight out of the file at its original resolution and passed through optical
+    character recognition — slower than the first case and, unlike it, able to misread. The list
+    above tells you which method each page used.</p>
+  </section>
+
+  <section class="block">
+    <h2>Nothing is uploaded</h2>
+    <p>Your document is opened by your own browser and stays there. No request carries it, nothing
+    is stored, and no account is needed — which matters when the PDF is an invoice, a contract or
+    a bank statement.</p>
+    <p>To be exact about the one network request that does happen: the first time you use the
+    page, your browser downloads the recognition engine from a public code repository, the same
+    way it downloads any script. After that it is usually cached and the page works offline. The
+    site also counts anonymous page views. Neither of those touches your file.</p>
+  </section>
+
+  <div class="cta">
+    <span class="tag">Only need one field?</span>
+    <h2>When it is one number, not a whole document</h2>
+    <p>Running a whole invoice through recognition to get one IBAN or one total is a lot of work
+    for one number — and you still have to find it in the output. Snip2Field sits on your Windows
+    desktop: press a hotkey, drag a box around just that field, and it reads it, checks an IBAN
+    against its checksum, and copies it. Fully offline, like this page.</p>
+    <a class="btn" href="/?utm_source=pdf-ocr&utm_medium=cta">See Snip2Field</a>
+    <div class="fine">Windows · $14 once · no subscription</div>
+  </div>
+
+  <div class="faq-wrap">
+    <h2>Questions</h2>
+    <details>
+      <summary>Is my PDF uploaded anywhere?</summary>
+      <p>No. The file is opened and processed by your own browser. It is never sent to a server, and nothing about its contents is stored. The page downloads its recognition engine from a public code CDN the first time you use it, and that is the only network request involved.</p>
+    </details>
+    <details>
+      <summary>Why can't I select the text in my PDF?</summary>
+      <p>Because the page is an image rather than text. Scanned, photographed or image-exported PDFs contain pixels that look like letters but carry no characters to select. Recognition turns those pixels back into text, which is what this tool does for the pages that need it.</p>
+    </details>
+    <details>
+      <summary>How accurate is it?</summary>
+      <p>Pages that already contain real text come out exactly, with no recognition involved. For scanned pages, accuracy depends on the scan: clean 300 dpi text is usually very good, while low-resolution photos, unusual fonts and handwriting are much less reliable. Always check numbers against the original.</p>
+    </details>
+    <details>
+      <summary>Is there a page limit or a watermark?</summary>
+      <p>Neither. Because the work happens on your machine there is nothing to meter. Very long scanned documents simply take longer, since each image page is recognised one at a time.</p>
+    </details>
+    <details>
+      <summary>Does it work offline?</summary>
+      <p>After the first run, usually yes — the browser caches the recognition engine. The first visit needs a connection to fetch it.</p>
+    </details>
+    <details>
+      <summary>What about IBANs and amounts specifically?</summary>
+      <p>Recognition can misread a digit in any tool, which matters far more for a bank number than for prose. <a href="/iban-checker/">The IBAN checker</a> will tell you whether an IBAN you extracted is internally valid, and <a href="/">Snip2Field</a> runs that check automatically when it copies one.</p>
+    </details>
+  </div>
+
+  <div class="slogan">Nothing ever leaves<br>your device.</div>
+
+  <div class="site-foot">
+    <span>
+      <a href="/">Snip2Field</a><a href="/tools/">All tools</a>
+      <span class="tools-strip">
+        <a href="/snip2text/">Snip2Text</a><a href="/iban-checker/">IBAN Checker</a>
+        <a href="/salary-clock/">Salary Clock</a>
+        <a href="/extract-text-from-scanned-pdf.html">Guide</a></span>
+    </span>
+    <span>© 2026</span>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (s) { return document.querySelector(s); };
+  var drop = $("#drop"), fileIn = $("#file"), work = $("#work"), res = $("#res");
+  var fill = $("#fill"), msg = $("#msg"), pct = $("#pct"), pages = $("#pages");
+  var out = $("#out"), meta = $("#meta"), summary = $("#summary");
+  var busy = false, worker = null, workerReady = null;
+
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+  }
+
+  function progress(p, text) {
+    fill.style.width = Math.max(0, Math.min(100, p)) + "%";
+    pct.textContent = Math.round(p) + "%";
+    if (text) msg.textContent = text;
+  }
+
+  function pageRow(n, how, note) {
+    var row = document.createElement("div");
+    row.className = "pg";
+    row.innerHTML = '<span class="n">Page ' + n + '</span>' +
+      '<span class="how ' + how + '">' + note + "</span>";
+    pages.appendChild(row);
+    pages.scrollTop = pages.scrollHeight;
+  }
+
+  function getWorker() {
+    if (workerReady) return workerReady;
+    workerReady = Tesseract.createWorker("eng", 1, {
+      logger: function (m) {
+        if (m.status === "recognizing text" && window.__pageBase !== undefined) {
+          progress(window.__pageBase + m.progress * window.__pageSpan);
+        }
+      }
+    }).then(function (w) { worker = w; return w; });
+    return workerReady;
+  }
+
+  // A page counts as having real text if the text layer yields something
+  // substantial. Scanned pages usually yield nothing, or a few stray marks.
+  function looksLikeText(s) {
+    var t = s.replace(/\s+/g, "");
+    return t.length >= 24;
+  }
+
+  // Pull the scan straight out of the page instead of rasterising it.
+  // A scanned page is one embedded image, so lifting that image gives the
+  // original scan at full resolution — sharper for recognition than a
+  // re-render, and it skips the rendering pipeline entirely.
+  function pageImages(page) {
+    return page.getOperatorList().then(function (ops) {
+      var OPS = pdfjsLib.OPS, keys = [];
+      for (var i = 0; i < ops.fnArray.length; i++) {
+        var fn = ops.fnArray[i];
+        if (fn === OPS.paintImageXObject || fn === OPS.paintJpegXObject) {
+          keys.push(ops.argsArray[i][0]);
+        }
+      }
+      return Promise.all(keys.map(function (k) {
+        return new Promise(function (resolve) {
+          var settled = false;
+          var finish = function (o) { if (!settled) { settled = true; resolve(o || null); } };
+          setTimeout(function () { finish(null); }, 15000);
+          try { page.objs.get(k, finish); } catch (e) { finish(null); }
+        });
+      })).then(function (objs) {
+        return objs.filter(function (o) { return o && o.width && o.height; });
+      });
+    });
+  }
+
+  function toCanvas(obj) {
+    var c = document.createElement("canvas");
+    c.width = obj.width; c.height = obj.height;
+    var cx = c.getContext("2d");
+    if (obj.bitmap) {
+      cx.drawImage(obj.bitmap, 0, 0);
+      return c;
+    }
+    if (!obj.data) return null;
+    var n = obj.width * obj.height, img = cx.createImageData(obj.width, obj.height);
+    if (obj.data.length >= n * 4) {
+      img.data.set(obj.data.subarray(0, n * 4));
+    } else if (obj.data.length >= n * 3) {          // RGB
+      for (var i = 0, j = 0; i < n; i++, j += 4) {
+        img.data[j] = obj.data[i * 3];
+        img.data[j + 1] = obj.data[i * 3 + 1];
+        img.data[j + 2] = obj.data[i * 3 + 2];
+        img.data[j + 3] = 255;
+      }
+    } else if (obj.data.length >= n) {              // greyscale
+      for (var g = 0, k = 0; g < n; g++, k += 4) {
+        img.data[k] = img.data[k + 1] = img.data[k + 2] = obj.data[g];
+        img.data[k + 3] = 255;
+      }
+    } else { return null; }
+    cx.putImageData(img, 0, 0);
+    return c;
+  }
+
+  async function run(file) {
+    if (busy) return;
+    if (!file || file.type.indexOf("pdf") === -1 && !/\.pdf$/i.test(file.name)) {
+      alert("That does not look like a PDF. For images, use Snip2Text instead.");
+      return;
+    }
+    busy = true;
+    drop.style.display = "none";
+    res.classList.remove("on");
+    work.classList.add("on");
+    pages.innerHTML = "";
+    progress(2, "Opening the file…");
+
+    var t0 = Date.now();
+    var buf = await file.arrayBuffer();
+    var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+    var n = pdf.numPages, parts = [], textPages = 0, ocrPages = 0;
+
+    for (var i = 1; i <= n; i++) {
+      var base = 4 + ((i - 1) / n) * 94, span = (1 / n) * 94;
+      progress(base, "Page " + i + " of " + n);
+      var page = await pdf.getPage(i);
+      var content = await page.getTextContent();
+      var text = content.items.map(function (it) { return it.str; }).join(" ")
+                        .replace(/[ \t]+/g, " ").trim();
+
+      if (looksLikeText(text)) {
+        textPages++;
+        pageRow(i, "text", "text layer · exact");
+      } else {
+        ocrPages++;
+        pageRow(i, "ocr", "scanned · recognising…");
+        progress(base, "Page " + i + " of " + n + " — recognising");
+        var imgs = await pageImages(page);
+        var chunks = [];
+        for (var k = 0; k < imgs.length; k++) {
+          var c = toCanvas(imgs[k]);
+          if (!c) continue;
+          var w = await getWorker();
+          window.__pageBase = base; window.__pageSpan = span;
+          var r = await w.recognize(c);
+          var got = (r.data.text || "").trim();
+          if (got) chunks.push(got);
+          c.width = c.height = 0;
+        }
+        text = chunks.join("\n");
+        var how = pages.lastChild.querySelector(".how");
+        if (!imgs.length) {
+          how.textContent = "no text and no image";
+          how.className = "how";
+        } else {
+          how.textContent = "scanned · recognised";
+        }
+      }
+      parts.push("--- Page " + i + " ---\n" + text);
+    }
+
+    progress(100, "Done");
+    var body = parts.join("\n\n");
+    out.value = body;
+    var words = body.split(/\s+/).filter(Boolean).length;
+    meta.textContent = n + (n === 1 ? " page" : " pages") + " · " + words + " words";
+    summary.textContent = textPages + " page" + (textPages === 1 ? "" : "s") +
+      " read directly, " + ocrPages + " recognised · " +
+      ((Date.now() - t0) / 1000).toFixed(1) + "s · nothing uploaded";
+    work.classList.remove("on");
+    res.classList.add("on");
+    busy = false;
+  }
+
+  drop.addEventListener("click", function () { fileIn.click(); });
+  drop.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileIn.click(); }
+  });
+  fileIn.addEventListener("change", function (e) {
+    if (e.target.files && e.target.files[0]) run(e.target.files[0]);
+  });
+  ["dragenter", "dragover"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over"); });
+  });
+  ["dragleave", "drop"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); });
+  });
+  drop.addEventListener("drop", function (e) {
+    var f = e.dataTransfer && e.dataTransfer.files[0];
+    if (f) run(f);
+  });
+  window.addEventListener("dragover", function (e) { e.preventDefault(); });
+  window.addEventListener("drop", function (e) { e.preventDefault(); });
+
+  $("#copy").addEventListener("click", function () {
+    var b = $("#copy");
+    function done() { b.textContent = "Copied"; setTimeout(function () { b.textContent = "Copy text"; }, 1600); }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(out.value).then(done, function () {});
+    } else { out.select(); try { document.execCommand("copy"); done(); } catch (e) {} }
+  });
+  $("#save").addEventListener("click", function () {
+    var blob = new Blob([out.value], { type: "text/plain;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "extracted-text.txt";
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+  });
+  $("#again").addEventListener("click", function () {
+    res.classList.remove("on");
+    drop.style.display = "";
+    fileIn.value = "";
+    out.value = "";
+  });
+
+  /* hook for automated checks */
+  window.__pdfocr = { run: run };
+})();
+</script>
+<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "3fe3f536ab224ac4aae3b10aca5ad025"}'></script><!-- End Cloudflare Web Analytics -->
+</body>
+</html>

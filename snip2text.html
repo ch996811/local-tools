@@ -1,0 +1,368 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Snip2Text — Free Screenshot to Text (OCR in Your Browser)</title>
+<meta name="description" content="Paste any screenshot and get the text instantly. Free OCR that runs 100% in your browser — nothing is uploaded, no signup, no limits.">
+<meta property="og:title" content="Snip2Text — turn any screenshot into text, free">
+<meta property="og:description" content="Paste a screenshot, copy the text. 100% private — OCR runs in your browser, nothing is uploaded.">
+<meta property="og:type" content="website">
+<meta name="theme-color" content="#FBFAF7">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✂️</text></svg>">
+<link rel="stylesheet" href="ledger.css" />
+<style>
+/* Only what is unique to this tool. Everything else comes from /ledger.css */
+
+/* ---------- hero ---------- */
+.hero { padding: 44px 0 30px; }
+.hero .kicker { margin-bottom: 22px; }
+.hero .lede { margin-top: 22px; }
+.lede em { font-style: normal; color: var(--ink); font-weight: 600; }
+
+.badges {
+  display: flex; flex-wrap: wrap; gap: 0 26px; margin-top: 26px;
+  border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+}
+.badge {
+  font-family: var(--mono); font-size: 11.5px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--muted); padding: 11px 0;
+}
+.badge b { color: var(--verified); font-weight: 700; }
+
+/* ---------- drop zone ---------- */
+.drop {
+  border: 2px dashed var(--rule); background: var(--paper-2);
+  padding: 46px 20px; text-align: center; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.drop:hover { border-color: var(--faint); }
+.drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop .ic { font-size: 34px; line-height: 1; }
+.drop .t {
+  font-family: var(--mono); font-weight: 700; font-size: 16px;
+  text-transform: uppercase; letter-spacing: .04em; margin-top: 14px;
+}
+.drop .s { color: var(--muted); font-size: 13.5px; line-height: 1.65; margin-top: 8px; }
+.kbd {
+  font-family: var(--mono); font-size: 11.5px; padding: 1px 6px; color: var(--ink);
+  background: var(--paper); border: 1px solid var(--rule); border-bottom-width: 2px;
+}
+
+.samples { display: flex; gap: 10px; margin-top: 12px; }
+.samples .btn { flex: 1; text-align: center; }
+
+input[type=file] { display: none; }
+
+/* ---------- processing ---------- */
+.proc { display: none; }
+.preview {
+  width: 100%; max-height: 300px; object-fit: contain;
+  border: 1px solid var(--rule); background: var(--paper-2);
+}
+.pb-wrap { margin-top: 20px; }
+.pb { height: 10px; border: 1px solid var(--rule); background: var(--rule-soft); overflow: hidden; }
+.pb i { display: block; height: 100%; width: 0%; background: var(--accent); transition: width .18s; }
+.pstatus {
+  display: flex; justify-content: space-between; gap: 14px; margin-top: 10px;
+  font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--muted);
+}
+.pstatus b { color: var(--ink); font-weight: 700; }
+
+/* ---------- result ---------- */
+.res { display: none; }
+.ok-line {
+  display: flex; align-items: center; gap: 10px;
+  font-family: var(--mono); font-size: 12px; font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--verified);
+  padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--rule);
+}
+.ok-line .dot { width: 8px; height: 8px; background: var(--verified); flex: none; }
+.ok-line .meta {
+  margin-left: auto; font-weight: 400; letter-spacing: .08em;
+  text-transform: none; color: var(--faint);
+}
+#out.field {
+  display: block; min-height: 230px; padding: 15px; resize: vertical;
+  font-size: 13.5px; letter-spacing: .02em; line-height: 1.62;
+}
+.btns { display: flex; gap: 12px; margin-top: 14px; }
+.btns .btn { flex: 1; text-align: center; }
+.btns .copy { flex: 2; }
+.copy.done, .copy.done:hover { background: var(--verified); border-color: var(--verified); color: var(--paper); }
+
+/* ---------- upsell ---------- */
+.upsell { display: none; margin-top: 24px; }
+.upsell .tag {
+  font-family: var(--mono); font-size: 11px; font-weight: 700;
+  letter-spacing: .14em; text-transform: uppercase; color: var(--accent);
+}
+.upsell h3 {
+  font-family: var(--mono); font-size: 17px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: -.02em; line-height: 1.25; margin-top: 10px;
+}
+.upsell p { color: var(--muted); font-size: 13.5px; margin-top: 10px; }
+.upsell .btn { display: block; text-align: center; margin-top: 18px; }
+.upsell .price {
+  font-family: var(--mono); font-size: 11px; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--faint); text-align: center; margin-top: 10px;
+}
+
+.hidden { display: none !important; }
+
+/* video-recording mode: clear the top caption zone */
+body.video .wrap-narrow { padding-top: 120px; }
+</style>
+<meta property="og:image" content="/og/snip2text.png" />
+</head>
+<body>
+<div class="wrap-narrow">
+
+  <div class="top">
+    <span><a href="/"><b>SNIP2FIELD</b></a> · SNIP2TEXT</span>
+    <span class="hide-sm">FREE · NOTHING UPLOADED</span>
+  </div>
+
+  <div id="home">
+    <div class="hero">
+      <div class="kicker"><span class="sq"></span> Free OCR · runs on your device</div>
+      <h1 class="display">
+        <span class="line">Screenshot →</span>
+        <span class="line"><span class="snip">text</span>. In your</span>
+        <span class="line">browser. Free.</span>
+      </h1>
+      <p class="lede">Paste any screenshot and copy the text out. No upload, no signup, no watermark — the OCR runs on <em>your</em> device.</p>
+      <div class="badges">
+        <span class="badge"><b>✓</b> 100% private</span>
+        <span class="badge"><b>✓</b> no signup</span>
+        <span class="badge"><b>✓</b> unlimited</span>
+      </div>
+    </div>
+
+    <div class="sec-label"><span>Your screenshot</span><span>Not uploaded</span></div>
+
+    <div class="drop" id="drop">
+      <div class="ic">📋</div>
+      <div class="t">Paste, drop, or tap</div>
+      <div class="s">Hit <span class="kbd">Ctrl</span> + <span class="kbd">V</span> anywhere on this page<br>or drop an image / choose a file</div>
+    </div>
+    <div class="samples">
+      <button class="btn btn-ghost btn-sm" id="sample-invoice">🧾 Try an invoice sample</button>
+      <button class="btn btn-ghost btn-sm" id="sample-chat">💬 Try a chat sample</button>
+    </div>
+    <input type="file" id="file" accept="image/*">
+  </div>
+
+  <!-- processing -->
+  <div class="proc" id="proc">
+    <div class="sec-label"><span>Reading</span><span>In your browser</span></div>
+    <img class="preview" id="preview" alt="your screenshot">
+    <div class="pb-wrap">
+      <div class="pb"><i id="pbfill"></i></div>
+      <div class="pstatus"><span id="pmsg">Warming up…</span><b id="ppct">0%</b></div>
+    </div>
+  </div>
+
+  <!-- result -->
+  <div class="res" id="res">
+    <div class="sec-label"><span>Result</span><span>Editable</span></div>
+    <div class="ok-line"><span class="dot"></span> Text extracted <span class="meta" id="meta">0 words</span></div>
+    <textarea class="field" id="out" spellcheck="false"></textarea>
+    <div class="btns">
+      <button class="btn copy" id="copy">📋 Copy text</button>
+      <button class="btn btn-ghost again" id="again">↺ New image</button>
+    </div>
+
+    <div class="upsell panel" id="upsell">
+      <div class="in">
+        <div class="tag">Spotted: IBAN / invoice data</div>
+        <h3>Typing invoice data into your bank all day?</h3>
+        <p>Snip2Field lives on your Windows desktop: press a hotkey, drag a box over any invoice, and the IBAN, amount, date or invoice number is copied — <b style="color:var(--ink)">checksum-validated</b> so you never paste a broken IBAN. Works offline.</p>
+        <a class="btn" href="/?utm_source=snip2text&utm_medium=upsell" target="_blank" rel="noopener">Get Snip2Field for Windows →</a>
+        <div class="price">One-time $14 · no subscription · 100% offline</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="slogan">Nothing ever leaves<br>your device.</div>
+
+  <div class="site-foot">
+    <span>
+      <a href="/salary-clock/?utm_source=snip2text" target="_blank" rel="noopener">Salary Clock</a><a href="/iban-checker/">IBAN Checker</a><a href="/?utm_source=snip2text&utm_medium=footer" target="_blank" rel="noopener">Snip2Field</a><a href="/tools/?utm_source=snip2text" target="_blank" rel="noopener">All tools</a>
+    </span>
+    <span>© 2026</span>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<script>
+(function(){
+"use strict";
+const $=s=>document.querySelector(s);
+if(new URLSearchParams(location.search).has("video")) document.body.classList.add("video");
+const drop=$("#drop"), fileIn=$("#file");
+let worker=null, workerReady=null, busy=false;
+
+const STATUS_LINES=[
+  [0,   "Warming up the reader…"],
+  [10,  "Scanning pixels…"],
+  [35,  "Finding letters…"],
+  [60,  "Reading words…"],
+  [85,  "Cleaning it up…"],
+  [97,  "Done ✨"]
+];
+
+function ensureWorker(){
+  if(workerReady) return workerReady;
+  workerReady = Tesseract.createWorker("eng", 1, {
+    logger: m=>{
+      if(m.status==="recognizing text"){
+        const pct=Math.round(m.progress*100);
+        setProgress(15+pct*0.85);
+      }
+    }
+  }).then(w=>{ worker=w; return w; });
+  return workerReady;
+}
+let shownP=0;
+function setProgress(p){
+  p=Math.max(0,Math.min(100,p));
+  if(p<shownP) return; // monotonic
+  shownP=p;
+  $("#pbfill").style.width=p+"%";
+  $("#ppct").textContent=Math.round(p)+"%";
+  const line=[...STATUS_LINES].reverse().find(s=>p>=s[0]);
+  $("#pmsg").textContent=line?line[1]:"Working…";
+}
+
+function show(which){
+  $("#home").style.display = which==="home"?"block":"none";
+  $("#proc").style.display = which==="proc"?"block":"none";
+  $("#res").style.display  = which==="res" ?"block":"none";
+}
+
+const MIN_PROC_MS=2200; // the reading moment deserves a beat, even when the model is cached
+async function runOCR(src){
+  if(busy) return; busy=true;
+  const t0=Date.now();
+  shownP=0;
+  $("#preview").src=src;
+  show("proc"); setProgress(3);
+  const ramp=setInterval(()=>{ setProgress(Math.min(90,((Date.now()-t0)/MIN_PROC_MS)*92)); },80);
+  try{
+    const w=await ensureWorker();
+    setProgress(12);
+    const {data}=await w.recognize(src);
+    let text=(data.text||"").replace(/[ \t]+\n/g,"\n").trim();
+    clearInterval(ramp);
+    setProgress(97);
+    const wait=Math.max(0,MIN_PROC_MS-(Date.now()-t0));
+    if(wait) await new Promise(r=>setTimeout(r,wait));
+    setProgress(100);
+    finish(text);
+  }catch(err){
+    clearInterval(ramp);
+    finish("", err);
+  }
+  busy=false;
+}
+function finish(text,err){
+  show("res");
+  const out=$("#out");
+  if(err||!text){
+    out.value = err ? "Something went wrong reading this image. Try a sharper screenshot." :
+                      "No text found — try a sharper screenshot, or crop closer to the text.";
+    $("#meta").textContent="0 words";
+    $("#upsell").style.display="none";
+    return;
+  }
+  out.value=text;
+  const words=(text.match(/\S+/g)||[]).length;
+  $("#meta").textContent=words+" words · "+text.length+" chars";
+  // If it smells like financial/invoice data → show the Snip2Field card
+  const finHit=/\bIBAN\b|invoice|[A-Z]{2}\d{2}[ ]?[A-Z0-9]{4}|total|amount|EUR|USD|€|\$/i.test(text);
+  $("#upsell").style.display = finHit ? "block" : "none";
+  if(!finHit){ /* still gently show it below the fold */ }
+  window.__ocrDone && window.__ocrDone(text);
+}
+
+/* ---- inputs ---- */
+drop.onclick=()=>fileIn.click();
+fileIn.onchange=()=>{ const f=fileIn.files[0]; if(f) readFile(f); fileIn.value=""; };
+function readFile(f){
+  if(!/^image\//.test(f.type)) return;
+  const r=new FileReader();
+  r.onload=()=>runOCR(r.result);
+  r.readAsDataURL(f);
+}
+addEventListener("paste",e=>{
+  const items=e.clipboardData&&e.clipboardData.items; if(!items) return;
+  for(const it of items){ if(it.type.indexOf("image")===0){ e.preventDefault(); readFile(it.getAsFile()); return; } }
+});
+["dragover","dragenter"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over");}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over");}));
+drop.addEventListener("drop",e=>{ const f=e.dataTransfer.files[0]; if(f) readFile(f); });
+
+$("#again").onclick=()=>{ show("home"); };
+$("#copy").onclick=async()=>{
+  const t=$("#out").value;
+  try{ await navigator.clipboard.writeText(t); }
+  catch(e){ $("#out").select(); document.execCommand("copy"); }
+  const b=$("#copy"); b.classList.add("done"); b.textContent="✓ Copied!";
+  setTimeout(()=>{ b.classList.remove("done"); b.textContent="📋 Copy text"; },1600);
+};
+
+/* ---- sample images (generated locally — deterministic, no assets) ---- */
+function makeSample(kind){
+  const c=document.createElement("canvas"); c.width=900; c.height=620;
+  const x=c.getContext("2d");
+  x.fillStyle="#f4f6f9"; x.fillRect(0,0,900,620);
+  // fake window chrome
+  x.fillStyle="#e3e8ef"; x.fillRect(0,0,900,54);
+  x.fillStyle="#ffffff"; x.fillRect(28,86,844,506);
+  x.strokeStyle="#e3e8ef"; x.strokeRect(28,86,844,506);
+  x.fillStyle="#1b2430"; x.textAlign="left";
+  if(kind==="invoice"){
+    x.font="700 34px Arial"; x.fillText("INVOICE  #2024-0817", 64, 156);
+    x.font="26px Arial"; x.fillStyle="#5a6572";
+    x.fillText("Muster Consulting GmbH", 64, 205);
+    x.fillText("Date: 12 Aug 2026    Due: 26 Aug 2026", 64, 243);
+    x.fillStyle="#1b2430"; x.font="26px Arial";
+    x.fillText("Consulting services, July", 64, 310);
+    x.fillText("VAT 19%", 64, 350);
+    x.font="700 30px Arial";
+    x.fillText("Total due:  EUR 2,380.00", 64, 412);
+    x.font="26px Consolas, monospace"; x.fillStyle="#12406e";
+    x.fillText("IBAN: DE89 3704 0044 0532 0130 00", 64, 470);
+    x.fillText("BIC:  COBADEFFXXX", 64, 508);
+    x.font="24px Arial"; x.fillStyle="#5a6572";
+    x.fillText("Please include invoice number as reference.", 64, 560);
+  }else{
+    x.font="700 30px Arial"; x.fillText("Team standup — notes", 64, 150);
+    x.font="26px Arial"; x.fillStyle="#33404e";
+    const lines=[
+      "Anna: shipping the landing page today,",
+      "need final copy review before 3pm.",
+      "",
+      "Ben: API rate limits fixed. Rolling out",
+      "to 10% of users, watching error rates.",
+      "",
+      "Next sync: Thursday 10:00, room B2.",
+      "Action: send launch checklist to everyone."
+    ];
+    lines.forEach((l,i)=>x.fillText(l, 64, 205+i*42));
+  }
+  return c.toDataURL("image/png");
+}
+$("#sample-invoice").onclick=()=>runOCR(makeSample("invoice"));
+$("#sample-chat").onclick=()=>runOCR(makeSample("chat"));
+
+/* hooks for the video renderer */
+window.__s2t={ runSample:(k)=>runOCR(makeSample(k)), reset:()=>show("home") };
+})();
+</script>
+<!-- Cloudflare Web Analytics --><script defer src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "3fe3f536ab224ac4aae3b10aca5ad025"}'></script><!-- End Cloudflare Web Analytics -->
+</body>
+</html>
