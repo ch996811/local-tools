@@ -35,10 +35,10 @@ Honesty is the point of the list this belongs on, so:
    from jsDelivr, and `pdf-to-text.html` also loads [pdf.js](https://github.com/mozilla/pdf.js).
    That is code coming *to* your browser. Your document does not go the other
    way. Vendor these two files locally if you want zero third-party requests.
-2. **The hosted copies count anonymous page views** with Cloudflare Web
-   Analytics (cookieless, no fingerprinting). It is one `<script>` tag near the
-   bottom of each file — delete it and everything still works. It is not present
-   in any way that touches your content.
+2. **The files in this repository contain no analytics at all.** The hosted
+   copies at snip2field.netlify.app add one Cloudflare Web Analytics script line
+   (anonymous, cookieless page views) at deploy time — that is a property of the
+   hosting, not of these tools, and it never touches your content.
 
 ## Running them
 
