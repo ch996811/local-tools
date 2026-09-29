@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Bank Statement to CSV — Converted in Your Browser, Never Uploaded</title>
+<meta name="description" content="Drop a bank statement PDF and get clean CSV rows: date, description, amount, balance. Every row is reconciled against the statement's own running balance, so a misread is flagged instead of exported. Runs entirely in your browser — the file is never uploaded." />
+<link rel="canonical" href="https://snip2field.netlify.app/statement-to-csv/" />
+<link rel="icon" type="image/png" href="/favicon.png" />
+<meta name="theme-color" content="#FBFAF7" />
+<meta property="og:title" content="Bank Statement to CSV — Converted in Your Browser, Never Uploaded" />
+<meta property="og:description" content="Drop a statement PDF, get reconciled CSV rows. Every line is checked against the statement's own balance column. Nothing is uploaded." />
+<meta property="og:image" content="/og/statement-to-csv.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebApplication",
+      "name": "Bank Statement to CSV",
+      "url": "https://snip2field.netlify.app/statement-to-csv/",
+      "applicationCategory": "FinanceApplication",
+      "operatingSystem": "Any (runs in the browser)",
+      "description": "Converts a bank statement PDF into CSV rows in the browser. Detects the date and decimal conventions, separates debits from credits, and reconciles every row against the statement's running balance. The file is never uploaded.",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is my bank statement uploaded anywhere?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No. The PDF is opened and parsed by your own browser and never leaves your machine. There is no account, nothing is stored, and no request carries the file or anything read out of it. The page fetches its PDF reader from a public code CDN the first time you use it, and that is the only network request involved." }
+        },
+        {
+          "@type": "Question",
+          "name": "What does reconciling the rows mean?",
+          "acceptedAnswer": { "@type": "Answer", "text": "If the statement has a running balance column, each row's amount should equal the change in balance from the row above. The converter checks that arithmetic on every line. Rows where it does not add up are flagged rather than silently exported, which is how a misread digit gets caught before it reaches your books." }
+        },
+        {
+          "@type": "Question",
+          "name": "Which statement formats work?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Any PDF with a real text layer, which is what banks issue when you download a statement. The converter works out the date convention (03/08 as March 8th or 3rd August) and the decimal convention (1,234.56 or 1.234,56) from the document itself, and handles both separate debit and credit columns and a single signed amount column." }
+        },
+        {
+          "@type": "Question",
+          "name": "What about scanned paper statements?",
+          "acceptedAnswer": { "@type": "Answer", "text": "A scan is an image, so there is no text layer to read. Run it through the PDF to Text tool first to see what comes out, but treat recognised figures with suspicion: for money, a digit misread is worse than no output at all." }
+        },
+        {
+          "@type": "Question",
+          "name": "Can I fix a row before exporting?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. Every cell in the table is editable, and the reconciliation check re-runs as you type, so you can see a flagged row turn green when the correction is right." }
+        }
+      ]
+    }
+  ]
+}
+</script>
+<link rel="stylesheet" href="ledger.css" />
+<style>
+  .hero { padding: 56px 0 34px; }
+  .hero .kicker { margin-bottom: 22px; }
+  .hero .lede { margin-top: 24px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 24px;
+           font-family: var(--mono); font-size: 11.5px; letter-spacing: .08em;
+           text-transform: uppercase; color: var(--muted); }
+  .chips span::before { content: "\2713 "; color: var(--verified); font-weight: 700; }
+
+  .stage { border-top: 1px solid var(--rule); padding: 30px 0 0; margin-top: 30px; }
+  .cap { font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+         text-transform: uppercase; color: var(--faint); margin-bottom: 14px;
+         display: flex; justify-content: space-between; gap: 12px; align-items: baseline; }
+
+  #drop { border: 2px dashed var(--rule); background: var(--paper-2); padding: 52px 24px;
+          text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+  #drop:hover, #drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  #drop .big { font-family: var(--mono); font-size: 17px; font-weight: 700; text-transform: uppercase;
+               letter-spacing: -.01em; margin-bottom: 8px; }
+  #drop .sm { color: var(--muted); font-size: 14px; }
+  .samples { margin-top: 14px; font-family: var(--mono); font-size: 12.5px;
+             color: var(--faint); letter-spacing: .04em; }
+  .samples b { color: var(--muted); font-weight: 400; text-transform: uppercase;
+               letter-spacing: .14em; font-size: 11px; margin-right: 10px; }
+  .samples button { background: none; border: none; color: var(--accent); cursor: pointer;
+                    font-family: var(--mono); font-size: 12.5px; padding: 2px 4px; }
+  .samples button:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .sample-note { border-left: 3px solid var(--error); background: var(--error-soft);
+                 padding: 10px 14px; margin: 0 0 18px; font-size: 14px; line-height: 1.5; }
+  .sample-note[hidden] { display: none; }
+
+  .work { display: none; padding: 30px 0; }
+  .work.on { display: block; }
+  .bar { height: 3px; background: var(--rule); margin-bottom: 12px; }
+  .bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .25s; }
+  .pstat { font-family: var(--mono); font-size: 12.5px; color: var(--muted); }
+
+  .res { display: none; }
+  .res.on { display: block; }
+
+  /* ---- what the parser worked out: shown, not hidden ---- */
+  .detected { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+              border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); margin-bottom: 26px; }
+  .detected div { padding: 16px 18px 16px 0; border-right: 1px solid var(--rule-soft); }
+  .detected div:last-child { border-right: none; }
+  .detected .k { font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em;
+                 text-transform: uppercase; color: var(--faint); margin-bottom: 6px; }
+  .detected .v { font-family: var(--mono); font-size: 15px; font-weight: 700; letter-spacing: -.01em; }
+  .detected .v.good { color: var(--verified); }
+  .detected .v.warn { color: var(--error); }
+
+  /* ---- the table is the product: make it read like a ledger ---- */
+  .tablewrap { overflow-x: auto; border-top: 1px solid var(--rule); }
+  table.tx { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 660px; }
+  table.tx thead th { font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em;
+                      text-transform: uppercase; color: var(--faint); font-weight: 400;
+                      text-align: left; padding: 12px 14px 12px 0; border-bottom: 1px solid var(--rule); }
+  table.tx thead th.num { text-align: right; }
+  table.tx tbody td { padding: 11px 14px 11px 0; border-bottom: 1px solid var(--rule-soft);
+                      vertical-align: baseline; }
+  table.tx tbody tr:hover { background: var(--rule-soft); }
+  table.tx td.date, table.tx td.num { font-family: var(--mono); font-variant-numeric: tabular-nums;
+                                      white-space: nowrap; }
+  table.tx td.num { text-align: right; }
+  table.tx td.desc { color: var(--muted); }
+  table.tx td.in  { color: var(--verified); font-weight: 700; }
+  table.tx td.out { color: var(--ink); }
+  table.tx td.bal { color: var(--faint); }
+  table.tx td[contenteditable]:focus { outline: 2px solid var(--accent); outline-offset: 1px;
+                                       background: var(--paper); color: var(--ink); }
+  table.tx tr.bad td { background: var(--error-soft); }
+  table.tx td.flag { width: 26px; padding-right: 0; font-family: var(--mono); font-size: 13px; }
+  table.tx td.flag .ok  { color: var(--verified); }
+  table.tx td.flag .no  { color: var(--error); font-weight: 700; }
+
+  /* ---- totals read like the bottom of a statement ---- */
+  .totals { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            border-bottom: 1px solid var(--rule); }
+  .totals div { padding: 18px 18px 18px 0; border-right: 1px solid var(--rule-soft); }
+  .totals div:last-child { border-right: none; }
+  .totals .k { font-family: var(--mono); font-size: 10.5px; letter-spacing: .14em;
+               text-transform: uppercase; color: var(--faint); margin-bottom: 7px; }
+  .totals .v { font-family: var(--mono); font-variant-numeric: tabular-nums;
+               font-size: clamp(19px, 2.6vw, 26px); font-weight: 700; letter-spacing: -.03em; }
+  .totals .v.in { color: var(--verified); }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 22px; }
+  .note-line { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em;
+               text-transform: uppercase; color: var(--faint); margin-top: 14px; }
+
+  section.block { padding: 32px 0; border-bottom: 1px solid var(--rule); max-width: 64ch; }
+  section.block h2 { font-family: var(--mono); font-size: clamp(17px, 2.4vw, 22px); font-weight: 700;
+                     text-transform: uppercase; letter-spacing: -.02em; margin-bottom: 10px; }
+  section.block p { color: var(--muted); font-size: 15.5px; }
+  section.block p + p { margin-top: 12px; }
+  .cta { padding: 34px 0; border-bottom: 1px solid var(--rule); }
+  .cta .tag { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+              color: var(--faint); display: block; margin-bottom: 11px; }
+  .cta h2 { font-family: var(--mono); font-size: clamp(18px, 2.6vw, 25px); font-weight: 700;
+            text-transform: uppercase; letter-spacing: -.02em; margin-bottom: 10px; }
+  .cta p { color: var(--muted); font-size: 15.5px; max-width: 58ch; }
+  .cta .btn { margin-top: 16px; }
+  .cta .fine { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em;
+               text-transform: uppercase; color: var(--faint); margin-top: 12px; }
+  .faq-wrap { padding: 32px 0 10px; max-width: 64ch; }
+  .faq-wrap h2 { font-family: var(--mono); font-size: clamp(17px, 2.4vw, 22px); font-weight: 700;
+                 text-transform: uppercase; letter-spacing: -.02em; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="top">
+    <span><a href="/"><b>SNIP2FIELD</b></a> · STATEMENT TO CSV</span>
+    <span class="hide-sm">FREE · NOTHING UPLOADED</span>
+  </div>
+
+  <div class="hero">
+    <div class="kicker"><span class="sq"></span> Free · no signup · reconciled, not just extracted</div>
+    <h1 class="display">
+      <span class="line">Bank statement</span>
+      <span class="line">to CSV, <span class="snip">checked</span></span>
+      <span class="line">against itself.</span>
+    </h1>
+    <p class="lede">Drop a statement PDF and get clean rows out: date, description, money in, money out, balance. Every line is <b>reconciled against the statement's own running balance</b>, so a misread is flagged instead of quietly landing in your books. <b>The file never leaves your machine.</b></p>
+    <div class="chips">
+      <span>Nothing uploaded</span>
+      <span>No signup</span>
+      <span>Every row verified</span>
+      <span>Editable before export</span>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="cap"><span>Your statement</span><span>Not uploaded</span></div>
+
+    <div id="drop" role="button" tabindex="0" aria-label="Choose or drop a bank statement PDF">
+      <div class="big">Drop a statement PDF, or tap to choose</div>
+      <div class="sm">Parsed on this device — the file is never sent anywhere</div>
+    </div>
+    <div class="samples" id="samples">
+      <b>No statement to hand?</b>
+      <button type="button" id="try-sample">Try it on a sample &rarr;</button>
+    </div>
+    <input id="file" type="file" accept="application/pdf,.pdf" hidden />
+
+    <div class="work" id="work">
+      <div class="bar"><i id="fill"></i></div>
+      <div class="pstat" id="msg">Opening…</div>
+    </div>
+
+    <div class="res" id="res">
+      <div class="detected" id="detected"></div>
+      <p class="sample-note" id="sample-note" hidden>This sample was altered on purpose so you can
+        see a flag: the Shell row prints <b>81.20</b>, but the balance only moved <b>61.20</b> &mdash;
+        the 6-for-8 slip a scan or a tired typist makes. Click that amount, change it to 61.20, and
+        the flag clears.</p>
+
+      <div class="cap"><span>Transactions — every cell is editable</span><span id="rowcount"></span></div>
+      <div class="tablewrap">
+        <table class="tx">
+          <thead>
+            <tr>
+              <th style="width:26px"></th>
+              <th>Date</th>
+              <th>Description</th>
+              <th class="num">Money in</th>
+              <th class="num">Money out</th>
+              <th class="num">Balance</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+
+      <div class="totals" id="totals"></div>
+
+      <div class="actions">
+        <button class="btn" id="dl">Download CSV</button>
+        <button class="btn btn-ghost" id="copy">Copy CSV</button>
+        <button class="btn btn-ghost" id="again">New statement</button>
+      </div>
+      <div class="note-line" id="summary"></div>
+    </div>
+  </div>
+
+  <section class="block">
+    <h2>Why reconcile instead of just extracting</h2>
+    <p>Most converters hand you rows and wish you luck. But a statement already contains the
+    answer key: if it prints a running balance, then every row's amount must equal the change in
+    balance from the line above. That is arithmetic, and arithmetic can be checked.</p>
+    <p>So every line gets checked. A row that adds up is marked with a tick; one that does not is
+    flagged in red and stays flagged until you fix it. A single digit read as an eight instead of a
+    three is exactly the kind of error that is invisible in a list of numbers and expensive in a
+    set of books.</p>
+  </section>
+
+  <section class="block">
+    <h2>It works out the conventions itself</h2>
+    <p>Statements disagree about almost everything. Is <code>03/08/2026</code> the third of August
+    or the eighth of March? Is <code>1.234,56</code> a thousand or one and a bit? Are debits in
+    their own column, or negative numbers in a shared one?</p>
+    <p>Rather than asking you, the converter reads the whole document and decides from the evidence
+    in it — a day above twelve settles the date order, the decimal separator settles the number
+    format, and the horizontal position of each figure settles the columns. Whatever it concluded
+    is shown above the table, so you can see the reasoning rather than trust it.</p>
+  </section>
+
+  <section class="block">
+    <h2>Nothing is uploaded</h2>
+    <p>Your statement is opened by your own browser and stays there. No request carries it, nothing
+    is stored, no account is needed — which is the whole point when the document lists every
+    payment you made last month.</p>
+    <p>To be exact about the one network request that happens: the first time you use this page
+    your browser downloads the PDF reader from a public code repository, the way it downloads any
+    script. After that it is cached and the page works offline. The site also counts anonymous
+    page views. Neither touches your file.</p>
+  </section>
+
+  <div class="cta">
+    <span class="tag">Doing this one field at a time?</span>
+    <h2>The same check, on a single number</h2>
+    <p>When it is one amount or one IBAN off an invoice rather than a whole statement, running the
+    document through a converter is a lot of work for one figure. Snip2Field sits on your Windows
+    desktop: press a hotkey, drag a box around just that field, and it reads it, validates an IBAN
+    against its checksum, and copies it. Fully offline, like this page.</p>
+    <a class="btn" href="/?utm_source=statement-to-csv&utm_medium=cta">See Snip2Field</a>
+    <div class="fine">Windows · $14 once · no subscription</div>
+  </div>
+
+  <div class="faq-wrap">
+    <h2>Questions</h2>
+    <details>
+      <summary>Is my bank statement uploaded anywhere?</summary>
+      <p>No. The PDF is opened and parsed by your own browser and never leaves your machine. There is no account, nothing is stored, and no request carries the file or anything read out of it. The page fetches its PDF reader from a public code CDN the first time you use it, and that is the only network request involved.</p>
+    </details>
+    <details>
+      <summary>What does reconciling the rows mean?</summary>
+      <p>If the statement has a running balance column, each row's amount should equal the change in balance from the row above. That arithmetic is checked on every line. Rows where it does not add up are flagged rather than silently exported, which is how a misread digit gets caught before it reaches your books.</p>
+    </details>
+    <details>
+      <summary>Which statement formats work?</summary>
+      <p>Any PDF with a real text layer, which is what banks issue when you download a statement. The converter works out the date convention and the decimal convention from the document itself, and handles both separate debit and credit columns and a single signed amount column.</p>
+    </details>
+    <details>
+      <summary>What about scanned paper statements?</summary>
+      <p>A scan is an image, so there is no text layer to read. Run it through <a href="/pdf-ocr/">PDF to Text</a> first to see what comes out, but treat recognised figures with suspicion: for money, a misread digit is worse than no output at all.</p>
+    </details>
+    <details>
+      <summary>Can I fix a row before exporting?</summary>
+      <p>Yes. Every cell in the table is editable, and the reconciliation check re-runs as you type — you can watch a flagged row turn green when the correction is right.</p>
+    </details>
+    <details>
+      <summary>Why is there no signup or page limit?</summary>
+      <p>There is nothing to meter. The work happens on your machine, so there is no server cost per statement and no reason to put a wall in front of it.</p>
+    </details>
+  </div>
+
+  <div class="slogan">Nothing ever leaves<br>your device.</div>
+
+  <div class="site-foot">
+    <span>
+      <a href="/">Snip2Field</a><a href="/tools/">All tools</a>
+      <span class="tools-strip">
+        <a href="/pdf-ocr/">PDF to Text</a><a href="/iban-checker/">IBAN Checker</a>
+        <a href="/snip2text/">Snip2Text</a><a href="/salary-clock/">Salary Clock</a></span>
+    </span>
+    <span>© 2026</span>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script>
+(function () {
+  "use strict";
+  var $ = function (s) { return document.querySelector(s); };
+  var drop = $("#drop"), fileIn = $("#file"), work = $("#work"), res = $("#res");
+  var samples = $("#samples"), sampleNote = $("#sample-note");
+  var fill = $("#fill"), msg = $("#msg"), rowsEl = $("#rows");
+  var busy = false, MODEL = null;
+
+  if (window.pdfjsLib) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      "https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js";
+  }
+
+  function progress(p, text) {
+    fill.style.width = Math.max(0, Math.min(100, p)) + "%";
+    if (text) msg.textContent = text;
+  }
+
+  /* ---------------- number and date conventions ---------------- */
+
+  // 1,234.56 / 1234.56 / (1,234.56) / 1,234.56-
+  var DOT = /^[(-]?\s*[\d]{1,3}(?:,\d{3})*\.\d{2}\s*[)-]?$/;
+  // 1.234,56 / 1234,56
+  var COMMA = /^[(-]?\s*[\d]{1,3}(?:\.\d{3})*,\d{2}\s*[)-]?$/;
+  var DATE = /^(\d{1,4})([\/.\-])(\d{1,2})\2(\d{2,4})$/;
+
+  function isAmount(s, dec) {
+    s = s.trim();
+    return dec === "comma" ? COMMA.test(s) : DOT.test(s);
+  }
+
+  function parseAmount(s, dec) {
+    var neg = /^\(.*\)$/.test(s.trim()) || /-\s*$/.test(s) || /^\s*-/.test(s);
+    var t = s.replace(/[()\s-]/g, "");
+    t = dec === "comma" ? t.replace(/\./g, "").replace(",", ".") : t.replace(/,/g, "");
+    var v = parseFloat(t);
+    if (isNaN(v)) return null;
+    return neg ? -Math.abs(v) : v;
+  }
+
+  function fmtAmount(v, dec) {
+    if (v === null || v === undefined || isNaN(v)) return "";
+    var s = Math.abs(v).toFixed(2);
+    var parts = s.split(".");
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, dec === "comma" ? "." : ",");
+    var out = parts[0] + (dec === "comma" ? "," : ".") + parts[1];
+    return (v < 0 ? "-" : "") + out;
+  }
+
+  // Returns {y, m, d} or null. order is "mdy", "dmy" or "ymd".
+  function parseDate(s, order) {
+    var m = DATE.exec(s.trim());
+    if (!m) return null;
+    var a = +m[1], b = +m[3], c = +m[4];
+    if (order === "ymd" || (m[1].length === 4)) return { y: a, m: b, d: c };
+    if (c < 100) c += c < 70 ? 2000 : 1900;
+    return order === "dmy" ? { y: c, m: b, d: a } : { y: c, m: a, d: b };
+  }
+
+  function isoDate(d) {
+    if (!d) return "";
+    var p = function (n) { return (n < 10 ? "0" : "") + n; };
+    return d.y + "-" + p(d.m) + "-" + p(d.d);
+  }
+
+  /* ---------------- reading the page into lines ---------------- */
+
+  async function readLines(pdf, onPage) {
+    var lines = [];
+    for (var p = 1; p <= pdf.numPages; p++) {
+      onPage(p, pdf.numPages);
+      var page = await pdf.getPage(p);
+      var content = await page.getTextContent();
+      var buckets = {};
+      content.items.forEach(function (it) {
+        var str = (it.str || "").trim();
+        if (!str) return;
+        var x = it.transform[4], y = it.transform[5];
+        var key = Math.round(y / 2.5); // tolerate baseline wobble
+        (buckets[key] = buckets[key] || []).push({ x: x, y: y, s: str });
+      });
+      Object.keys(buckets).forEach(function (k) {
+        var items = buckets[k].sort(function (a, b) { return a.x - b.x; });
+        lines.push({ page: p, y: items[0].y, items: items });
+      });
+    }
+    // top of page 1 first
+    lines.sort(function (a, b) { return a.page - b.page || b.y - a.y; });
+    return lines;
+  }
+
+  /* ---------------- working out the conventions ---------------- */
+
+  function detectConventions(lines) {
+    var dot = 0, comma = 0, dayOver12 = 0, monthOver12 = 0, isoSeen = 0;
+    lines.forEach(function (ln) {
+      ln.items.forEach(function (it) {
+        var s = it.s;
+        if (DOT.test(s)) dot++;
+        else if (COMMA.test(s)) comma++;
+        var m = DATE.exec(s);
+        if (m) {
+          if (m[1].length === 4) isoSeen++;
+          else {
+            if (+m[1] > 12) dayOver12++;
+            if (+m[3] > 12) monthOver12++;
+          }
+        }
+      });
+    });
+    var dec = comma > dot ? "comma" : "dot";
+    var order = isoSeen && !dayOver12 && !monthOver12 ? "ymd"
+              : dayOver12 ? "dmy"
+              : monthOver12 ? "mdy"
+              : dec === "comma" ? "dmy" : "mdy"; // convention follows the number format
+    return { dec: dec, order: order, dotCount: dot, commaCount: comma };
+  }
+
+  /* ---------------- pulling transactions out ---------------- */
+
+  function extract(lines, conv) {
+    var raw = [];
+    lines.forEach(function (ln) {
+      var first = ln.items[0];
+      var d = parseDate(first.s, conv.order);
+      if (!d) return;
+      var amounts = [];
+      var descParts = [];
+      for (var i = 1; i < ln.items.length; i++) {
+        var it = ln.items[i];
+        if (isAmount(it.s, conv.dec)) amounts.push({ x: it.x, v: parseAmount(it.s, conv.dec), s: it.s });
+        else descParts.push(it.s);
+      }
+      if (!amounts.length) return;
+      raw.push({ date: d, desc: descParts.join(" ").replace(/\s+/g, " ").trim(), amounts: amounts });
+    });
+    if (!raw.length) return { rows: [], layout: "none" };
+
+    // Which x-columns do amounts live in?
+    var xs = [];
+    raw.forEach(function (r) { r.amounts.forEach(function (a) { xs.push(a.x); }); });
+    xs.sort(function (a, b) { return a - b; });
+    var cols = [];
+    xs.forEach(function (x) {
+      var c = cols.find(function (cc) { return Math.abs(cc.x - x) < 26; });
+      if (c) { c.n++; c.x = (c.x * (c.n - 1) + x) / c.n; }
+      else cols.push({ x: x, n: 1 });
+    });
+    cols = cols.filter(function (c) { return c.n >= Math.max(2, raw.length * 0.25); })
+               .sort(function (a, b) { return a.x - b.x; });
+
+    var layout = cols.length >= 3 ? "debit-credit-balance"
+               : cols.length === 2 ? "amount-balance"
+               : "amount-only";
+
+    function nearest(amounts, col) {
+      var best = null, bd = 1e9;
+      amounts.forEach(function (a) {
+        var d = Math.abs(a.x - col.x);
+        if (d < bd && d < 26) { bd = d; best = a; }
+      });
+      return best;
+    }
+
+    var rows = raw.map(function (r) {
+      var inn = null, out = null, bal = null;
+      if (layout === "debit-credit-balance") {
+        var dCol = nearest(r.amounts, cols[0]);
+        var cCol = nearest(r.amounts, cols[1]);
+        var bCol = nearest(r.amounts, cols[2]);
+        out = dCol ? Math.abs(dCol.v) : null;
+        inn = cCol ? Math.abs(cCol.v) : null;
+        bal = bCol ? bCol.v : null;
+      } else if (layout === "amount-balance") {
+        var aCol = nearest(r.amounts, cols[0]);
+        var b2 = nearest(r.amounts, cols[1]);
+        if (aCol) { if (aCol.v < 0) out = Math.abs(aCol.v); else inn = aCol.v; }
+        bal = b2 ? b2.v : null;
+      } else {
+        var only = r.amounts[r.amounts.length - 1];
+        if (only.v < 0) out = Math.abs(only.v); else inn = only.v;
+      }
+      return { date: isoDate(r.date), desc: r.desc, in: inn, out: out, bal: bal };
+    });
+
+    return { rows: rows, layout: layout, columns: cols.length };
+  }
+
+  /* ---------------- the check that makes this worth using ---------------- */
+
+  function reconcile(rows) {
+    var checked = 0, failed = 0;
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      r.status = "none";
+      if (i === 0 || r.bal === null || rows[i - 1].bal === null) continue;
+      var moved = (r.in || 0) - (r.out || 0);
+      if (r.in === null && r.out === null) continue;
+      var delta = r.bal - rows[i - 1].bal;
+      checked++;
+      if (Math.abs(delta - moved) < 0.005) r.status = "ok";
+      else { r.status = "bad"; failed++; }
+    }
+    return { checked: checked, failed: failed };
+  }
+
+  /* ---------------- rendering ---------------- */
+
+  function render() {
+    var m = MODEL;
+    var rec = reconcile(m.rows);
+    m.rec = rec;
+
+    rowsEl.innerHTML = "";
+    m.rows.forEach(function (r, i) {
+      var tr = document.createElement("tr");
+      if (r.status === "bad") tr.className = "bad";
+      var flag = r.status === "ok" ? '<span class="ok" title="Reconciles with the balance column">&#10003;</span>'
+               : r.status === "bad" ? '<span class="no" title="Does not match the change in balance">!</span>'
+               : "";
+      tr.innerHTML =
+        '<td class="flag">' + flag + "</td>" +
+        '<td class="date" contenteditable data-f="date" data-i="' + i + '">' + r.date + "</td>" +
+        '<td class="desc" contenteditable data-f="desc" data-i="' + i + '">' + escapeHtml(r.desc) + "</td>" +
+        '<td class="num in" contenteditable data-f="in" data-i="' + i + '">' + fmtAmount(r.in, m.conv.dec) + "</td>" +
+        '<td class="num out" contenteditable data-f="out" data-i="' + i + '">' + fmtAmount(r.out, m.conv.dec) + "</td>" +
+        '<td class="num bal" contenteditable data-f="bal" data-i="' + i + '">' + fmtAmount(r.bal, m.conv.dec) + "</td>";
+      rowsEl.appendChild(tr);
+    });
+
+    renderSummaries(rec);
+  }
+
+  /* Totals, the detected-conventions panel and the summary line all derive
+     from the rows, so they are redrawn together after every edit. */
+  function renderSummaries(rec) {
+    var m = MODEL;
+    var totalIn = 0, totalOut = 0;
+    m.rows.forEach(function (r) { totalIn += r.in || 0; totalOut += r.out || 0; });
+    $("#rowcount").textContent = m.rows.length + (m.rows.length === 1 ? " row" : " rows");
+
+    $("#totals").innerHTML =
+      block("Money in", '<span class="v in">' + fmtAmount(totalIn, m.conv.dec) + "</span>") +
+      block("Money out", '<span class="v">' + fmtAmount(totalOut, m.conv.dec) + "</span>") +
+      block("Net", '<span class="v">' + fmtAmount(totalIn - totalOut, m.conv.dec) + "</span>") +
+      block("Period", '<span class="v" style="font-size:15px">' + (m.rows[0] ? m.rows[0].date : "") +
+            " &rarr; " + (m.rows[m.rows.length - 1] ? m.rows[m.rows.length - 1].date : "") + "</span>");
+
+    var recClass = rec.failed ? "warn" : "good";
+    var recText = !rec.checked ? "no balance column"
+                : rec.failed ? rec.failed + " of " + rec.checked + " do not add up"
+                : "all " + rec.checked + " rows add up";
+    $("#detected").innerHTML =
+      dblock("Date format", m.conv.order === "dmy" ? "DD/MM/YYYY" : m.conv.order === "ymd" ? "YYYY-MM-DD" : "MM/DD/YYYY", "") +
+      dblock("Decimal format", m.conv.dec === "comma" ? "1.234,56" : "1,234.56", "") +
+      dblock("Columns", m.layout === "debit-credit-balance" ? "Debit / credit / balance"
+             : m.layout === "amount-balance" ? "Amount / balance" : "Amount only", "") +
+      dblock("Reconciliation", recText, recClass);
+
+    $("#summary").textContent = m.rows.length + " rows · " +
+      (rec.checked ? (rec.failed ? rec.failed + " flagged — fix them above before exporting"
+                                 : "every checkable row reconciles") : "no balance column to check against") +
+      " · nothing uploaded";
+  }
+
+  function block(k, v) { return '<div><div class="k">' + k + "</div>" + v + "</div>"; }
+  function dblock(k, v, cls) {
+    return '<div><div class="k">' + k + '</div><div class="v ' + cls + '">' + v + "</div></div>";
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"]/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c];
+    });
+  }
+
+  rowsEl.addEventListener("input", function (e) {
+    var td = e.target.closest("td[contenteditable]");
+    if (!td || !MODEL) return;
+    var i = +td.dataset.i, f = td.dataset.f, txt = td.textContent.trim();
+    var r = MODEL.rows[i];
+    if (f === "desc" || f === "date") r[f] = txt;
+    else r[f] = txt === "" ? null : parseAmount(txt, MODEL.conv.dec);
+    var rec = reconcile(MODEL.rows);
+    // update only the flags, so the cell being typed in keeps focus
+    [].forEach.call(rowsEl.children, function (tr, idx) {
+      var st = MODEL.rows[idx].status;
+      tr.className = st === "bad" ? "bad" : "";
+      tr.querySelector(".flag").innerHTML =
+        st === "ok" ? '<span class="ok">&#10003;</span>' : st === "bad" ? '<span class="no">!</span>' : "";
+    });
+    renderSummaries(rec);
+  });
+
+  /* ---------------- CSV ---------------- */
+
+  function toCsv() {
+    var q = function (s) {
+      s = s === null || s === undefined ? "" : String(s);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    var n = function (v) { return v === null || v === undefined ? "" : v.toFixed(2); };
+    var out = ["Date,Description,Money in,Money out,Balance,Reconciled"];
+    MODEL.rows.forEach(function (r) {
+      out.push([q(r.date), q(r.desc), n(r.in), n(r.out), n(r.bal),
+                r.status === "ok" ? "yes" : r.status === "bad" ? "NO" : ""].join(","));
+    });
+    return out.join("\r\n");
+  }
+
+  /* ---------------- flow ---------------- */
+
+  async function run(file) {
+    if (busy) return;
+    if (!file || (file.type.indexOf("pdf") === -1 && !/\.pdf$/i.test(file.name))) {
+      alert("That does not look like a PDF.");
+      return;
+    }
+    busy = true;
+    drop.style.display = "none";
+    samples.style.display = "none";
+    sampleNote.hidden = !isSample;
+    res.classList.remove("on");
+    work.classList.add("on");
+    progress(6, "Opening the file…");
+
+    try {
+      var buf = await file.arrayBuffer();
+      var pdf = await pdfjsLib.getDocument({ data: buf }).promise;
+      var lines = await readLines(pdf, function (p, n) {
+        progress(10 + (p / n) * 70, "Reading page " + p + " of " + n + "…");
+      });
+      progress(86, "Working out the format…");
+      var conv = detectConventions(lines);
+      progress(93, "Pulling out transactions…");
+      var ex = extract(lines, conv);
+
+      if (!ex.rows.length) {
+        work.classList.remove("on");
+        drop.style.display = "";
+        samples.style.display = "";
+        busy = false;
+        alert("No transaction rows were found. If this is a scanned statement there is no text to read — try PDF to Text first.");
+        return;
+      }
+
+      MODEL = { rows: ex.rows, conv: conv, layout: ex.layout };
+      progress(100, "Done");
+      render();
+      work.classList.remove("on");
+      res.classList.add("on");
+    } catch (err) {
+      work.classList.remove("on");
+      drop.style.display = "";
+      samples.style.display = "";
+      alert("Could not read that PDF: " + err.message);
+    }
+    busy = false;
+  }
+
+  drop.addEventListener("click", function () { fileIn.click(); });
+  drop.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileIn.click(); }
+  });
+  fileIn.addEventListener("change", function (e) {
+    if (e.target.files && e.target.files[0]) run(e.target.files[0]);
+  });
+  ["dragenter", "dragover"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over"); });
+  });
+  ["dragleave", "drop"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); });
+  });
+  drop.addEventListener("drop", function (e) {
+    var f = e.dataTransfer && e.dataTransfer.files[0];
+    if (f) run(f);
+  });
+  window.addEventListener("dragover", function (e) { e.preventDefault(); });
+  window.addEventListener("drop", function (e) { e.preventDefault(); });
+
+  $("#dl").addEventListener("click", function () {
+    var blob = new Blob([toCsv()], { type: "text/csv;charset=utf-8" });
+    var a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "statement.csv";
+    a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+  });
+  $("#copy").addEventListener("click", function () {
+    var b = $("#copy");
+    var done = function () { b.textContent = "Copied"; setTimeout(function () { b.textContent = "Copy CSV"; }, 1600); };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(toCsv()).then(done, function () {});
+  });
+  $("#again").addEventListener("click", function () {
+    res.classList.remove("on");
+    drop.style.display = "";
+    samples.style.display = "";
+    sampleNote.hidden = true;
+    fileIn.value = "";
+    MODEL = null;
+  });
+
+  /* The sample is a real PDF with a real text layer, run through exactly the
+     same path as a dropped file — so it proves the parser, not a mock-up. */
+  var isSample = false;
+  $("#try-sample").addEventListener("click", function () {
+    fetch("sample-statement.pdf").then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.blob();
+    }).then(function (b) {
+      isSample = true;
+      return run(new File([b], "sample-statement.pdf", { type: "application/pdf" }));
+    }).then(function () { isSample = false; }, function (err) {
+      isSample = false;
+      alert("Could not load the sample: " + err.message);
+    });
+  });
+
+  /* hooks for automated checks */
+  window.__stmt = {
+    run: run,
+    model: function () { return MODEL; },
+    csv: function () { return toCsv(); },
+    parseAmount: parseAmount,
+    detect: detectConventions
+  };
+})();
+</script>
+</body>
+</html>

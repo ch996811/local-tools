@@ -1,0 +1,919 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Screenshot Studio — Beautify &amp; Annotate Screenshots in Your Browser</title>
+<meta name="description" content="Give any screenshot a pretty background, padding and a soft shadow, annotate it with arrows and text, and blur the sensitive parts — all in your browser. Nothing is uploaded. Free, no signup." />
+<link rel="canonical" href="https://snip2field.netlify.app/screenshot-studio/" />
+<link rel="icon" type="image/png" href="/favicon.png" />
+<meta name="theme-color" content="#FBFAF7" />
+<meta property="og:title" content="Screenshot Studio — Beautify &amp; Annotate Screenshots in Your Browser" />
+<meta property="og:description" content="Pretty backgrounds, arrows, labels and privacy blur for any screenshot — composed entirely in your browser. The image is never uploaded. Free, no signup." />
+<meta property="og:image" content="/og/screenshot-studio.png" />
+<meta name="twitter:card" content="summary_large_image" />
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebApplication",
+      "name": "Screenshot Studio",
+      "url": "https://snip2field.netlify.app/screenshot-studio/",
+      "applicationCategory": "UtilitiesApplication",
+      "operatingSystem": "Any (runs in the browser)",
+      "description": "Paste a screenshot and make it presentation-ready: gradient or solid backgrounds, padding, rounded corners and shadow, plus arrows, boxes, text labels and a pixelating blur for sensitive parts. Everything is composed on your own device and the image is never uploaded.",
+      "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+    },
+    {
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "Is my screenshot uploaded anywhere?",
+          "acceptedAnswer": { "@type": "Answer", "text": "No. The image is opened, composed and exported by your own browser, on your own machine. No request carries it, nothing is stored, and the page loads no third-party code at all — the only network activity is an anonymous page-view count." }
+        },
+        {
+          "@type": "Question",
+          "name": "How do I blur sensitive information?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Pick the Blur tool and drag a box over the part to hide — an email address, an account balance, a token. That region of the screenshot is genuinely pixelated: the original pixels are replaced by coarse blocks before export, not covered by a removable overlay. Draw the box generously so nothing legible survives at the edges." }
+        },
+        {
+          "@type": "Question",
+          "name": "Why is there no watermark?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Because there is nothing to pay for. The work happens on your own machine, so it costs nothing to run and there is nothing to meter, no account to push you toward, and no reason to stamp your image." }
+        },
+        {
+          "@type": "Question",
+          "name": "Does it work offline?",
+          "acceptedAnswer": { "@type": "Answer", "text": "Yes. The page uses no libraries; the only thing it loads from elsewhere is an anonymous page-view counter, and your image never goes anywhere. Once it is open it works with the connection switched off. Everything — compositing, annotation, blur, export — is plain code running in your browser." }
+        },
+        {
+          "@type": "Question",
+          "name": "What image formats can I use?",
+          "acceptedAnswer": { "@type": "Answer", "text": "PNG, JPEG and WebP go in — pasted with Ctrl+V, dropped onto the page, or picked as a file. The result comes out as a PNG at normal or double resolution, or is copied straight to the clipboard." }
+        }
+      ]
+    }
+  ]
+}
+</script>
+<link rel="stylesheet" href="ledger.css" />
+<style>
+  .hero { padding: 56px 0 34px; }
+  .hero .kicker { margin-bottom: 22px; }
+  .hero .lede { margin-top: 24px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 24px;
+           font-family: var(--mono); font-size: 11.5px; letter-spacing: .08em;
+           text-transform: uppercase; color: var(--muted); }
+  .chips span::before { content: "\2713 "; color: var(--verified); font-weight: 700; }
+
+  .stage { border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule);
+           padding: 30px 0; margin-top: 34px; }
+  .cap { font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+         text-transform: uppercase; color: var(--faint); margin-bottom: 14px;
+         display: flex; justify-content: space-between; gap: 12px; }
+
+  #drop { border: 2px dashed var(--rule); background: var(--paper-2); padding: 46px 24px;
+          text-align: center; cursor: pointer; transition: border-color .15s, background .15s; }
+  #drop:hover, #drop.over { border-color: var(--accent); background: var(--accent-soft); }
+  #drop .big { font-family: var(--mono); font-size: 17px; font-weight: 700; text-transform: uppercase;
+               letter-spacing: -.01em; margin-bottom: 8px; }
+  #drop .sm { color: var(--muted); font-size: 14px; }
+  .samples { margin-top: 14px; font-family: var(--mono); font-size: 12.5px;
+             color: var(--faint); letter-spacing: .04em; }
+  .samples b { color: var(--muted); font-weight: 400; text-transform: uppercase;
+               letter-spacing: .14em; font-size: 11px; margin-right: 10px; }
+  .samples button { background: none; border: none; color: var(--accent); cursor: pointer;
+                    font-family: var(--mono); font-size: 12.5px; padding: 2px 4px; }
+  .samples button:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .samples.hide { display: none; }
+  #drop .sm b { font-family: var(--mono); font-size: 12px; border: 1px solid var(--rule);
+                padding: 1px 6px; color: var(--ink); font-weight: 400; }
+
+  .editor { display: none; }
+  .editor.on { display: block; }
+
+  .hold { position: relative; border: 1px solid var(--rule); background: var(--paper-2);
+          padding: 18px; display: flex; justify-content: center; }
+  #view { max-width: 100%; height: auto; display: block; touch-action: none; }
+  #view.tooling { cursor: crosshair; }
+  .hold.alpha #view {
+    background-image: linear-gradient(45deg, #d9d9d9 25%, transparent 25%, transparent 75%, #d9d9d9 75%),
+                      linear-gradient(45deg, #d9d9d9 25%, transparent 25%, transparent 75%, #d9d9d9 75%);
+    background-position: 0 0, 10px 10px; background-size: 20px 20px; background-color: #f3f3f3;
+  }
+  .txt-in { position: absolute; display: none; z-index: 3; min-width: 140px;
+            font: 600 15px var(--sans); padding: 5px 9px; color: var(--ink);
+            background: var(--paper); border: 1.5px solid var(--accent); outline: none; }
+
+  .dims { font-family: var(--mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+          color: var(--faint); margin-top: 10px; display: flex; justify-content: space-between;
+          gap: 12px; flex-wrap: wrap; }
+
+  .ctl { border-bottom: 1px solid var(--rule-soft); padding: 13px 0;
+         display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center; }
+  .ctl .lbl { font-family: var(--mono); font-size: 11px; letter-spacing: .14em;
+              text-transform: uppercase; color: var(--faint); min-width: 92px; }
+  .ctl .val { font-family: var(--mono); font-size: 11.5px; color: var(--muted); min-width: 44px; }
+
+  .sw { width: 30px; height: 30px; border: 1px solid var(--rule); cursor: pointer; padding: 0;
+        background: none; flex: none; }
+  .sw:hover { border-color: var(--ink); }
+  .sw.on { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .sw-alpha { background-image: linear-gradient(45deg, #cfcfcf 25%, transparent 25%, transparent 75%, #cfcfcf 75%),
+              linear-gradient(45deg, #cfcfcf 25%, transparent 25%, transparent 75%, #cfcfcf 75%);
+              background-position: 0 0, 7px 7px; background-size: 14px 14px; background-color: #f3f3f3; }
+
+  .tb { font-family: var(--mono); font-size: 11.5px; letter-spacing: .09em; text-transform: uppercase;
+        padding: 8px 12px; border: 1px solid var(--rule); background: transparent;
+        color: var(--muted); cursor: pointer; transition: border-color .12s, background .12s, color .12s; }
+  .tb:hover { border-color: var(--ink); color: var(--ink); }
+  .tb.on { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+
+  input[type="range"] { width: 150px; accent-color: var(--accent); }
+  input[type="color"] { width: 34px; height: 30px; padding: 0; border: 1px solid var(--rule);
+                        background: none; cursor: pointer; }
+
+  .actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 16px; align-items: center; }
+  .status { font-family: var(--mono); font-size: 12px; letter-spacing: .08em;
+            text-transform: uppercase; color: var(--faint); margin-top: 12px; min-height: 18px; }
+
+  section.block { padding: 32px 0; border-bottom: 1px solid var(--rule); max-width: 64ch; }
+  section.block h2 { font-family: var(--mono); font-size: clamp(17px, 2.4vw, 22px); font-weight: 700;
+                     text-transform: uppercase; letter-spacing: -.02em; margin-bottom: 10px; }
+  section.block p { color: var(--muted); font-size: 15.5px; }
+  section.block p + p { margin-top: 12px; }
+  .cta { padding: 34px 0; border-bottom: 1px solid var(--rule); }
+  .cta .tag { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+              color: var(--faint); display: block; margin-bottom: 11px; }
+  .cta h2 { font-family: var(--mono); font-size: clamp(18px, 2.6vw, 25px); font-weight: 700;
+            text-transform: uppercase; letter-spacing: -.02em; margin-bottom: 10px; }
+  .cta p { color: var(--muted); font-size: 15.5px; max-width: 58ch; }
+  .cta .btn { margin-top: 16px; }
+  .cta .fine { font-family: var(--mono); font-size: 11.5px; letter-spacing: .1em;
+               text-transform: uppercase; color: var(--faint); margin-top: 12px; }
+  .faq-wrap { padding: 32px 0 10px; max-width: 64ch; }
+  .faq-wrap h2 { font-family: var(--mono); font-size: clamp(17px, 2.4vw, 22px); font-weight: 700;
+                 text-transform: uppercase; letter-spacing: -.02em; margin-bottom: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap-narrow">
+
+  <div class="top">
+    <span><a href="/"><b>SNIP2FIELD</b></a> · SCREENSHOT STUDIO</span>
+    <span class="hide-sm">FREE · NOTHING UPLOADED</span>
+  </div>
+
+  <div class="hero">
+    <div class="kicker"><span class="sq"></span> Free · no signup · no watermark</div>
+    <h1 class="display">
+      <span class="line">Screenshots,</span>
+      <span class="line">made <span class="snip">presentable</span>,</span>
+      <span class="line">in your browser.</span>
+    </h1>
+    <p class="lede">Paste a screenshot, give it a background, padding and a soft shadow, draw the arrow, blur the parts that are nobody's business, and export a clean PNG. <b>The image never leaves your machine.</b></p>
+    <div class="chips">
+      <span>Nothing uploaded</span>
+      <span>No signup</span>
+      <span>No watermark</span>
+      <span>Works offline</span>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="cap"><span>Your screenshot</span><span>Not uploaded</span></div>
+
+    <div id="drop" role="button" tabindex="0" aria-label="Paste, drop or choose a screenshot">
+      <div class="big">Paste, drop, or tap to choose</div>
+      <div class="sm"><b>Ctrl+V</b> anywhere on this page · PNG, JPEG or WebP · nothing is sent anywhere</div>
+    </div>
+    <div class="samples" id="samples">
+      <b>No screenshot to hand?</b>
+      <button type="button" id="try-sample">Try it on a sample &rarr;</button>
+    </div>
+    <input id="file" type="file" accept="image/png,image/jpeg,image/webp" hidden />
+
+    <div class="editor" id="editor">
+      <div class="hold" id="hold">
+        <canvas id="view"></canvas>
+        <input id="txtin" class="txt-in" type="text" maxlength="120" placeholder="Label, then Enter"
+               aria-label="Annotation text" />
+      </div>
+      <div class="dims"><span id="dims"></span><span>Rendered on this device</span></div>
+
+      <div class="ctl">
+        <span class="lbl">Background</span>
+        <button class="sw" data-preset="indigo"  title="Indigo to violet"  style="background:linear-gradient(135deg,#4F46E5,#7C3AED)"></button>
+        <button class="sw" data-preset="ocean"   title="Teal to sky"       style="background:linear-gradient(135deg,#0D9488,#38BDF8)"></button>
+        <button class="sw" data-preset="sunset"  title="Warm sunset"       style="background:linear-gradient(135deg,#FDE68A,#FB923C,#E11D48)"></button>
+        <button class="sw" data-preset="graphite" title="Graphite"         style="background:linear-gradient(135deg,#3F4650,#15181D)"></button>
+        <button class="sw" data-preset="mint"    title="Mint"              style="background:linear-gradient(135deg,#ECFDF5,#5EEAD4)"></button>
+        <button class="sw" data-preset="rose"    title="Rose"              style="background:linear-gradient(135deg,#FBCFE8,#F472B6)"></button>
+        <button class="sw" data-preset="white"   title="Solid white"       style="background:#FFFFFF"></button>
+        <button class="sw" data-preset="paper"   title="Solid paper"       style="background:#FBFAF7"></button>
+        <button class="sw sw-alpha" data-preset="transparent" title="Transparent"></button>
+      </div>
+
+      <div class="ctl">
+        <span class="lbl">Frame</span>
+        <label class="val" for="pad">Pad</label>
+        <input id="pad" type="range" min="0" max="128" step="1" value="48" aria-label="Padding" />
+        <span class="val" id="padv">48</span>
+        <label class="val" for="rad">Corner</label>
+        <input id="rad" type="range" min="0" max="24" step="1" value="12" aria-label="Corner radius" />
+        <span class="val" id="radv">12</span>
+        <button class="tb on" id="shadow" aria-pressed="true">Shadow</button>
+      </div>
+
+      <div class="ctl">
+        <span class="lbl">Output</span>
+        <button class="tb on" data-aspect="auto">Auto</button>
+        <button class="tb" data-aspect="1:1">1:1</button>
+        <button class="tb" data-aspect="4:3">4:3</button>
+        <button class="tb" data-aspect="16:9">16:9</button>
+      </div>
+
+      <div class="ctl">
+        <span class="lbl">Annotate</span>
+        <button class="tb" data-tool="arrow">Arrow</button>
+        <button class="tb" data-tool="rect">Box</button>
+        <button class="tb" data-tool="pen">Pen</button>
+        <button class="tb" data-tool="text">Text</button>
+        <button class="tb" data-tool="blur">Blur</button>
+        <input id="color" type="color" value="#17457A" title="Annotation color" aria-label="Annotation color" />
+        <button class="tb on" data-lw="3">3px</button>
+        <button class="tb" data-lw="6">6px</button>
+        <button class="tb" id="undo" title="Undo last annotation (Ctrl+Z)">Undo</button>
+      </div>
+
+      <div class="actions">
+        <button class="btn" id="dl1">Download PNG</button>
+        <button class="btn btn-ghost" id="dl2">Download 2&times;</button>
+        <button class="btn btn-ghost" id="copy">Copy to clipboard</button>
+        <button class="btn btn-ghost btn-sm" id="again">New image</button>
+      </div>
+      <div class="status" id="status"></div>
+    </div>
+  </div>
+
+  <section class="block">
+    <h2>From raw capture to something you can show</h2>
+    <p>A bare screenshot is evidence, not a slide. This page composes it for you: a background
+    behind it — six gradients, plain white, paper, or fully transparent — breathing room around
+    it, gently rounded corners and a believable shadow, letterboxed to square, 4:3 or 16:9 if a
+    deck or a post needs it.</p>
+    <p>Then you mark it up on top: an arrow to the thing that matters, a box around it, a freehand
+    scribble, a text label. Every control re-renders live, and the export is a clean PNG at
+    normal or double resolution — or straight onto your clipboard.</p>
+  </section>
+
+  <section class="block">
+    <h2>Blur the parts that are nobody's business</h2>
+    <p>Screenshots leak: an email address in the corner, an account balance, an API token in a
+    terminal. The blur tool takes the region you drag and pixelates it — the original pixels are
+    scaled down to coarse blocks and written back, so the detail is destroyed in the exported
+    image itself, not hidden under an overlay someone could peel off.</p>
+    <p>Be generous with the box. Pixelation destroys what it covers, but a value that pokes out
+    past the edge is still readable — and as with any redaction, blur the whole value, not just
+    most of it.</p>
+    <p>The blocks are deliberately coarse, never smaller than 12 pixels, because fine pixelation
+    of text can be partly reversed by tools that match it against rendered letters. For a
+    password or a key, crop it out entirely: nothing beats not having the pixels at all.</p>
+  </section>
+
+  <section class="block">
+    <h2>Nothing is uploaded — nothing is even downloaded</h2>
+    <p>Your screenshot is opened, composed and exported by your own browser. No request carries
+    it and nothing about it is stored — which matters when the screenshot shows a dashboard, an
+    inbox or a bank statement.</p>
+    <p>This page also loads no libraries and no third-party code at all: the whole tool is plain
+    code inside this one page, so it keeps working with the connection switched off. The only
+    network activity is an anonymous page-view count, which never touches your image.</p>
+  </section>
+
+  <div class="cta">
+    <span class="tag">Screenshots at work?</span>
+    <h2>When the screenshot holds a number you need typed</h2>
+    <p>Prettifying is for showing. When a screenshot holds an IBAN, an invoice total or an order
+    number you need to get <em>into</em> a form, Snip2Field sits on your Windows desktop: press a
+    hotkey, drag a box around just that field, and it reads it, checks an IBAN against its
+    checksum, and copies it. Fully offline, like this page.</p>
+    <a class="btn" href="/?utm_source=screenshot-studio&amp;utm_medium=cta">See Snip2Field</a>
+    <div class="fine">Windows · $14 once · no subscription</div>
+  </div>
+
+  <div class="faq-wrap">
+    <h2>Questions</h2>
+    <details>
+      <summary>Is my screenshot uploaded anywhere?</summary>
+      <p>No. The image is opened, composed and exported by your own browser, on your own machine. No request carries it, nothing is stored, and the page loads no third-party code at all — the only network activity is an anonymous page-view count.</p>
+    </details>
+    <details>
+      <summary>How do I blur sensitive information?</summary>
+      <p>Pick the Blur tool and drag a box over the part to hide — an email address, a balance, a token. That region is genuinely pixelated: the original pixels are replaced by coarse blocks before export, not covered by a removable overlay. Draw the box generously so nothing legible survives at the edges.</p>
+    </details>
+    <details>
+      <summary>Why is there no watermark?</summary>
+      <p>Because there is nothing to pay for. The work happens on your own machine, so it costs nothing to run and there is nothing to meter, no account to push you toward, and no reason to stamp your image.</p>
+    </details>
+    <details>
+      <summary>Does it work offline?</summary>
+      <p>Yes. The page uses no libraries; the only thing it loads from elsewhere is an anonymous page-view counter, and your image never goes anywhere. Once it is open it works with the connection switched off. Everything — compositing, annotation, blur, export — is plain code running in your browser.</p>
+    </details>
+    <details>
+      <summary>What image formats can I use?</summary>
+      <p>PNG, JPEG and WebP go in — pasted with Ctrl+V, dropped onto the page, or picked as a file. The result comes out as a PNG at normal or double resolution, or is copied straight to the clipboard.</p>
+    </details>
+    <details>
+      <summary>Can it read the text out of a screenshot?</summary>
+      <p>Not this page — this one is for making screenshots presentable. <a href="/snip2text/">Snip2Text</a> extracts the text from an image, also entirely in your browser, and <a href="/">Snip2Field</a> does it from any pixels on your Windows desktop with a hotkey.</p>
+    </details>
+  </div>
+
+  <div class="slogan">Nothing ever leaves<br>your device.</div>
+
+  <div class="site-foot">
+    <span>
+      <a href="/">Snip2Field</a><a href="/tools/">All tools</a>
+      <span class="tools-strip">
+        <a href="/snip2text/">Snip2Text</a><a href="/iban-checker/">IBAN Checker</a>
+        <a href="/pdf-ocr/">PDF OCR</a><a href="/salary-clock/">Salary Clock</a></span>
+    </span>
+    <span>© 2026</span>
+  </div>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (s) { return document.querySelector(s); };
+  var $$ = function (s) { return Array.prototype.slice.call(document.querySelectorAll(s)); };
+
+  var drop = $("#drop"), fileIn = $("#file"), editor = $("#editor"), hold = $("#hold");
+  var view = $("#view"), ctxView = view.getContext("2d");
+  var txtin = $("#txtin"), status = $("#status"), dims = $("#dims");
+
+  var SANS = '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+
+  var PRESETS = {
+    indigo:      { g: ["#4F46E5", "#7C3AED"] },
+    ocean:       { g: ["#0D9488", "#38BDF8"] },
+    sunset:      { g: ["#FDE68A", "#FB923C", "#E11D48"] },
+    graphite:    { g: ["#3F4650", "#15181D"] },
+    mint:        { g: ["#ECFDF5", "#5EEAD4"] },
+    rose:        { g: ["#FBCFE8", "#F472B6"] },
+    white:       { s: "#FFFFFF" },
+    paper:       { s: "#FBFAF7" },
+    transparent: {}
+  };
+
+  var state = {
+    img: null,            // canvas holding the original screenshot pixels
+    preset: "indigo",
+    pad: 48,
+    radius: 12,
+    shadow: true,
+    aspect: "auto",
+    color: "#17457A",
+    lw: 3,
+    tool: null,
+    ann: []               // annotation list, in screenshot pixel coordinates
+  };
+
+  var lastLayout = null;
+  var procCache = null;   // screenshot with blur regions baked in
+  var drag = null;
+
+  /* ---------- geometry ---------- */
+
+  function layout() {
+    var iw = state.img.width, ih = state.img.height, p = state.pad;
+    var cw = iw + 2 * p, ch = ih + 2 * p;
+    var r = { "1:1": 1, "4:3": 4 / 3, "16:9": 16 / 9 }[state.aspect];
+    if (r) {
+      if (cw / ch < r) cw = Math.round(ch * r);
+      else ch = Math.round(cw / r);
+    }
+    return { w: cw, h: ch, ix: Math.round((cw - iw) / 2), iy: Math.round((ch - ih) / 2) };
+  }
+
+  function rr(ctx, x, y, w, h, r) {
+    r = Math.max(0, Math.min(r, w / 2, h / 2));
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  /* ---------- blur: genuine pixelation, baked into the pixels ---------- */
+
+  function pixelate(work, a) {
+    var x = Math.round(Math.max(0, Math.min(a.x, work.width)));
+    var y = Math.round(Math.max(0, Math.min(a.y, work.height)));
+    var w = Math.round(Math.min(a.w - (x - a.x), work.width - x));
+    var h = Math.round(Math.min(a.h - (y - a.y), work.height - y));
+    if (w < 4 || h < 4) return;
+    // Coarse on purpose: small-block pixelation of text can be partly reversed
+    // by matching rendered glyphs (Depix), so a block is never under 12px.
+    var block = Math.max(12, Math.round(Math.min(w, h) / 4));
+    var cols = Math.max(1, Math.round(w / block));
+    var rows = Math.max(1, Math.round(h / block));
+    var tiny = document.createElement("canvas");
+    tiny.width = cols; tiny.height = rows;
+    var t = tiny.getContext("2d");
+    t.imageSmoothingEnabled = true;
+    t.drawImage(work, x, y, w, h, 0, 0, cols, rows);   // average down…
+    var cx = work.getContext("2d");
+    cx.save();
+    cx.imageSmoothingEnabled = false;                  // …blow back up, no smoothing
+    cx.drawImage(tiny, 0, 0, cols, rows, x, y, w, h);
+    cx.restore();
+  }
+
+  function processed() {
+    if (procCache) return procCache;
+    var c = document.createElement("canvas");
+    c.width = state.img.width; c.height = state.img.height;
+    c.getContext("2d").drawImage(state.img, 0, 0);
+    for (var i = 0; i < state.ann.length; i++) {
+      if (state.ann[i].type === "blur") pixelate(c, state.ann[i]);
+    }
+    procCache = c;
+    return c;
+  }
+
+  function invalidate() { procCache = null; }
+
+  /* ---------- annotation drawing (image coordinates) ---------- */
+
+  function drawAnn(ctx, a) {
+    ctx.save();
+    ctx.strokeStyle = a.color; ctx.fillStyle = a.color;
+    ctx.lineWidth = a.lw; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    if (a.type === "rect") {
+      ctx.strokeRect(a.x, a.y, a.w, a.h);
+    } else if (a.type === "arrow") {
+      var ang = Math.atan2(a.y2 - a.y1, a.x2 - a.x1);
+      var hl = Math.max(11, a.lw * 3.5);
+      ctx.beginPath();
+      ctx.moveTo(a.x1, a.y1);
+      ctx.lineTo(a.x2 - hl * 0.6 * Math.cos(ang), a.y2 - hl * 0.6 * Math.sin(ang));
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(a.x2, a.y2);
+      ctx.lineTo(a.x2 - hl * Math.cos(ang - 0.42), a.y2 - hl * Math.sin(ang - 0.42));
+      ctx.lineTo(a.x2 - hl * Math.cos(ang + 0.42), a.y2 - hl * Math.sin(ang + 0.42));
+      ctx.closePath();
+      ctx.fill();
+    } else if (a.type === "pen") {
+      if (a.pts.length < 2) { ctx.restore(); return; }
+      ctx.beginPath();
+      ctx.moveTo(a.pts[0][0], a.pts[0][1]);
+      for (var i = 1; i < a.pts.length; i++) ctx.lineTo(a.pts[i][0], a.pts[i][1]);
+      ctx.stroke();
+    } else if (a.type === "text") {
+      ctx.font = "700 " + a.size + "px " + SANS;
+      ctx.textBaseline = "top";
+      ctx.lineWidth = Math.max(3, a.size / 7);
+      ctx.strokeStyle = "rgba(255,255,255,.9)";
+      ctx.strokeText(a.text, a.x, a.y);
+      ctx.fillText(a.text, a.x, a.y);
+    }
+    ctx.restore();
+  }
+
+  /* ---------- render pipeline ---------- */
+
+  function renderTo(canvas, scale) {
+    var L = layout();
+    canvas.width = Math.round(L.w * scale);
+    canvas.height = Math.round(L.h * scale);
+    var ctx = canvas.getContext("2d");
+    ctx.setTransform(scale, 0, 0, scale, 0, 0);
+    ctx.clearRect(0, 0, L.w, L.h);
+
+    var p = PRESETS[state.preset] || PRESETS.indigo;
+    if (p.s) { ctx.fillStyle = p.s; ctx.fillRect(0, 0, L.w, L.h); }
+    else if (p.g) {
+      var g = ctx.createLinearGradient(0, 0, L.w, L.h);
+      for (var i = 0; i < p.g.length; i++) g.addColorStop(i / (p.g.length - 1), p.g[i]);
+      ctx.fillStyle = g; ctx.fillRect(0, 0, L.w, L.h);
+    }
+
+    var iw = state.img.width, ih = state.img.height;
+    if (state.shadow) {
+      ctx.save();
+      var soft = Math.max(14, Math.min(60, iw * 0.035));
+      ctx.shadowColor = "rgba(10, 12, 18, 0.38)";
+      ctx.shadowBlur = soft * scale;         // shadow attrs ignore the CTM
+      ctx.shadowOffsetY = soft * 0.45 * scale;
+      rr(ctx, L.ix, L.iy, iw, ih, state.radius);
+      ctx.fillStyle = "#000";
+      ctx.fill();
+      ctx.restore();
+    }
+    ctx.save();
+    rr(ctx, L.ix, L.iy, iw, ih, state.radius);
+    ctx.clip();
+    ctx.drawImage(processed(), L.ix, L.iy);
+    ctx.restore();
+
+    ctx.save();
+    ctx.translate(L.ix, L.iy);
+    for (var k = 0; k < state.ann.length; k++) {
+      if (state.ann[k].type !== "blur") drawAnn(ctx, state.ann[k]);
+    }
+    ctx.restore();
+    return L;
+  }
+
+  function render() {
+    if (!state.img) return;
+    lastLayout = renderTo(view, 1);
+    hold.classList.toggle("alpha", state.preset === "transparent");
+    dims.textContent = state.img.width + " × " + state.img.height + " in · " +
+      lastLayout.w + " × " + lastLayout.h + " out";
+  }
+
+  /* ---------- image intake ---------- */
+
+  function setImage(el) {
+    var w = el.naturalWidth || el.width, h = el.naturalHeight || el.height;
+    if (!w || !h) return;
+    var c = document.createElement("canvas");
+    c.width = w; c.height = h;
+    c.getContext("2d").drawImage(el, 0, 0);
+    state.img = c;
+    state.ann = [];
+    invalidate();
+    drop.style.display = "none";
+    editor.classList.add("on");
+    say("");
+    render();
+  }
+
+  function load(src) {
+    return new Promise(function (resolve, reject) {
+      if (src && typeof Blob !== "undefined" && src instanceof Blob) {
+        if (!/^image\/(png|jpeg|webp)$/.test(src.type) && src.type.indexOf("image/") !== 0) {
+          reject(new Error("Not an image")); return;
+        }
+        var url = URL.createObjectURL(src);
+        var im = new Image();
+        im.onload = function () { URL.revokeObjectURL(url); setImage(im); resolve(); };
+        im.onerror = function () { URL.revokeObjectURL(url); reject(new Error("Could not decode image")); };
+        im.src = url;
+      } else if (src && (src.naturalWidth || src.width)) {
+        setImage(src); resolve();
+      } else {
+        reject(new Error("Unsupported input"));
+      }
+    });
+  }
+
+  function takeFile(f) {
+    if (!f) return;
+    if (!/^image\/(png|jpeg|webp)$/.test(f.type)) {
+      say("PNG, JPEG or WebP only.");
+      return;
+    }
+    load(f).catch(function () { say("Could not open that image."); });
+  }
+
+  function say(t) { status.textContent = t; }
+
+  /* ---------- pointer interaction ---------- */
+
+  function pt(e) {
+    var r = view.getBoundingClientRect();
+    return {
+      x: (e.clientX - r.left) * (view.width / r.width) - lastLayout.ix,
+      y: (e.clientY - r.top) * (view.height / r.height) - lastLayout.iy
+    };
+  }
+
+  function tempAnn(p) {
+    var t = state.tool;
+    if (t === "arrow") return { type: "arrow", x1: drag.x0, y1: drag.y0, x2: p.x, y2: p.y, color: state.color, lw: state.lw };
+    if (t === "rect") return { type: "rect", x: Math.min(drag.x0, p.x), y: Math.min(drag.y0, p.y),
+                               w: Math.abs(p.x - drag.x0), h: Math.abs(p.y - drag.y0), color: state.color, lw: state.lw };
+    if (t === "pen") return { type: "pen", pts: drag.pts, color: state.color, lw: state.lw };
+    if (t === "blur") return { type: "blur", x: Math.min(drag.x0, p.x), y: Math.min(drag.y0, p.y),
+                               w: Math.abs(p.x - drag.x0), h: Math.abs(p.y - drag.y0) };
+    return null;
+  }
+
+  function preview(a) {
+    render();
+    if (!a) return;
+    ctxView.save();
+    ctxView.translate(lastLayout.ix, lastLayout.iy);
+    if (a.type === "blur") {
+      ctxView.setLineDash([6, 5]);
+      ctxView.strokeStyle = state.color;
+      ctxView.lineWidth = 1.5;
+      ctxView.strokeRect(a.x, a.y, a.w, a.h);
+    } else {
+      drawAnn(ctxView, a);
+    }
+    ctxView.restore();
+  }
+
+  view.addEventListener("pointerdown", function (e) {
+    if (!state.img || !state.tool || e.button !== 0) return;
+    e.preventDefault();
+    if (state.tool === "text") { openTextInput(e); return; }
+    try { view.setPointerCapture(e.pointerId); } catch (err) {}
+    var p = pt(e);
+    drag = { x0: p.x, y0: p.y };
+    if (state.tool === "pen") drag.pts = [[p.x, p.y]];
+  });
+
+  view.addEventListener("pointermove", function (e) {
+    if (!drag) return;
+    var p = pt(e);
+    if (state.tool === "pen") drag.pts.push([p.x, p.y]);
+    preview(tempAnn(p));
+  });
+
+  view.addEventListener("pointerup", function (e) {
+    if (!drag) return;
+    var a = tempAnn(pt(e));
+    drag = null;
+    if (!a) { render(); return; }
+    var big = a.type === "pen" ? a.pts.length > 1
+            : a.type === "arrow" ? Math.hypot(a.x2 - a.x1, a.y2 - a.y1) > 3
+            : (a.w > 3 && a.h > 3);
+    if (big) {
+      state.ann.push(a);
+      if (a.type === "blur") invalidate();
+    }
+    render();
+  });
+
+  view.addEventListener("pointercancel", function () { drag = null; render(); });
+
+  /* ---------- text tool ---------- */
+
+  function openTextInput(e) {
+    var hr = hold.getBoundingClientRect();
+    var p = pt(e);
+    txtin.dataset.x = p.x; txtin.dataset.y = p.y;
+    txtin.style.left = Math.min(e.clientX - hr.left, hr.width - 160) + "px";
+    txtin.style.top = (e.clientY - hr.top) + "px";
+    txtin.style.display = "block";
+    txtin.value = "";
+    txtin.focus();
+  }
+
+  function commitText() {
+    var t = txtin.value.trim();
+    txtin.style.display = "none";
+    if (!t) return;
+    state.ann.push({
+      type: "text", text: t,
+      x: parseFloat(txtin.dataset.x), y: parseFloat(txtin.dataset.y),
+      color: state.color, size: Math.round(state.lw * 7 + 5)
+    });
+    render();
+  }
+
+  txtin.addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { e.preventDefault(); commitText(); }
+    if (e.key === "Escape") { txtin.value = ""; txtin.style.display = "none"; }
+    e.stopPropagation();
+  });
+  txtin.addEventListener("blur", commitText);
+
+  /* ---------- controls ---------- */
+
+  $$(".sw").forEach(function (b) {
+    b.addEventListener("click", function () { setPreset(b.dataset.preset); });
+  });
+
+  function setPreset(name) {
+    if (!PRESETS[name]) return;
+    state.preset = name;
+    $$(".sw").forEach(function (b) { b.classList.toggle("on", b.dataset.preset === name); });
+    render();
+  }
+
+  $("#pad").addEventListener("input", function () {
+    state.pad = +this.value; $("#padv").textContent = this.value; render();
+  });
+  $("#rad").addEventListener("input", function () {
+    state.radius = +this.value; $("#radv").textContent = this.value; render();
+  });
+  $("#shadow").addEventListener("click", function () {
+    state.shadow = !state.shadow;
+    this.classList.toggle("on", state.shadow);
+    this.setAttribute("aria-pressed", state.shadow);
+    render();
+  });
+
+  $$("[data-aspect]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      state.aspect = b.dataset.aspect;
+      $$("[data-aspect]").forEach(function (x) { x.classList.toggle("on", x === b); });
+      render();
+    });
+  });
+
+  $$("[data-tool]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      state.tool = state.tool === b.dataset.tool ? null : b.dataset.tool;
+      $$("[data-tool]").forEach(function (x) { x.classList.toggle("on", x.dataset.tool === state.tool); });
+      view.classList.toggle("tooling", !!state.tool);
+    });
+  });
+
+  $$("[data-lw]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      state.lw = +b.dataset.lw;
+      $$("[data-lw]").forEach(function (x) { x.classList.toggle("on", x === b); });
+    });
+  });
+
+  $("#color").addEventListener("input", function () { state.color = this.value; });
+
+  function undo() {
+    var a = state.ann.pop();
+    if (!a) return;
+    if (a.type === "blur") invalidate();
+    render();
+  }
+  $("#undo").addEventListener("click", undo);
+  document.addEventListener("keydown", function (e) {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z" &&
+        document.activeElement !== txtin) { e.preventDefault(); undo(); }
+  });
+
+  /* ---------- intake events ---------- */
+
+  drop.addEventListener("click", function () { fileIn.click(); });
+  drop.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileIn.click(); }
+  });
+  fileIn.addEventListener("change", function (e) {
+    if (e.target.files && e.target.files[0]) takeFile(e.target.files[0]);
+  });
+  ["dragenter", "dragover"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over"); });
+  });
+  ["dragleave", "drop"].forEach(function (ev) {
+    drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); });
+  });
+  drop.addEventListener("drop", function (e) {
+    var f = e.dataTransfer && e.dataTransfer.files[0];
+    if (f) takeFile(f);
+  });
+  window.addEventListener("dragover", function (e) { e.preventDefault(); });
+  window.addEventListener("drop", function (e) {
+    e.preventDefault();
+    var f = e.dataTransfer && e.dataTransfer.files[0];
+    if (f) takeFile(f);
+  });
+  document.addEventListener("paste", function (e) {
+    var items = e.clipboardData && e.clipboardData.items;
+    if (!items) return;
+    for (var i = 0; i < items.length; i++) {
+      if (items[i].type.indexOf("image/") === 0) {
+        var f = items[i].getAsFile();
+        if (f) { e.preventDefault(); load(f).catch(function () { say("Could not open that image."); }); }
+        return;
+      }
+    }
+  });
+
+  /* ---------- export ---------- */
+
+  function exportCanvas(scale) {
+    var c = document.createElement("canvas");
+    renderTo(c, scale || 1);
+    return c;
+  }
+
+  function download(scale, suffix) {
+    if (!state.img) return;
+    exportCanvas(scale).toBlob(function (blob) {
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "screenshot-studio" + suffix + ".png";
+      a.click();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+    }, "image/png");
+  }
+
+  $("#dl1").addEventListener("click", function () { download(1, ""); });
+  $("#dl2").addEventListener("click", function () { download(2, "@2x"); });
+
+  $("#copy").addEventListener("click", function () {
+    if (!state.img) return;
+    if (!(navigator.clipboard && navigator.clipboard.write && window.ClipboardItem)) {
+      say("Clipboard image copy is not supported in this browser — use Download PNG.");
+      return;
+    }
+    exportCanvas(1).toBlob(function (blob) {
+      navigator.clipboard.write([new ClipboardItem({ "image/png": blob })])
+        .then(function () { say("Copied to clipboard."); })
+        .catch(function () { say("The browser refused the copy — use Download PNG."); });
+    }, "image/png");
+  });
+
+  $("#again").addEventListener("click", function () {
+    state.img = null; state.ann = []; invalidate();
+    editor.classList.remove("on");
+    drop.style.display = "";
+    fileIn.value = "";
+    var sm = document.getElementById("samples");
+    if (sm) sm.classList.remove("hide");
+    say("");
+  });
+
+  setPreset("indigo");
+
+  /* A first-time visitor should see the product working, not an empty box.
+     The sample is drawn here rather than shipped as an asset — one less
+     request, and nothing to keep in sync. */
+  function sampleImage() {
+    var c = document.createElement("canvas");
+    c.width = 900; c.height = 560;
+    var x = c.getContext("2d");
+    x.fillStyle = "#ffffff"; x.fillRect(0, 0, 900, 560);
+    x.fillStyle = "#1f2937"; x.fillRect(0, 0, 900, 62);
+    x.fillStyle = "#ffffff"; x.font = "600 21px Segoe UI, sans-serif";
+    x.fillText("Acme Analytics", 28, 39);
+    x.fillStyle = "#9ca3af"; x.font = "15px Segoe UI, sans-serif";
+    x.fillText("alex.whitfield@acme-industries.com", 560, 39);
+    x.fillStyle = "#111827"; x.font = "600 30px Segoe UI, sans-serif";
+    x.fillText("Monthly revenue", 28, 126);
+    x.fillStyle = "#6b7280"; x.font = "16px Segoe UI, sans-serif";
+    x.fillText("Account balance: $128,940.22   ·   Plan: Business", 28, 156);
+    var bars = [120, 176, 148, 232, 296, 254];
+    bars.forEach(function (h, i) {
+      x.fillStyle = i === 4 ? "#17457A" : "#d1d5db";
+      x.fillRect(40 + i * 138, 468 - h, 92, h);
+    });
+    x.fillStyle = "#6b7280"; x.font = "14px Segoe UI, sans-serif";
+    ["Mar", "Apr", "May", "Jun", "Jul", "Aug"].forEach(function (m, i) {
+      x.fillText(m, 40 + i * 138 + 30, 492);
+    });
+    x.strokeStyle = "#e5e7eb"; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(28, 472); x.lineTo(872, 472); x.stroke();
+    x.fillStyle = "#111827"; x.font = "600 19px Segoe UI, sans-serif";
+    x.fillText("$48,210", 40, 528);
+    x.fillStyle = "#0e7c5a"; x.font = "15px Segoe UI, sans-serif";
+    x.fillText("+18.4% vs July", 150, 528);
+    return c.toDataURL("image/png");
+  }
+
+  var sampleBtn = document.getElementById("try-sample");
+  if (sampleBtn) {
+    sampleBtn.addEventListener("click", function () {
+      var img = new Image();
+      img.onload = function () {
+        load(img);
+        setPreset("indigo");
+        var s = document.getElementById("samples");
+        if (s) s.classList.add("hide");
+      };
+      img.src = sampleImage();
+    });
+  }
+
+  /* ---------- hooks for automated checks ---------- */
+
+  window.__studio = {
+    load: load,
+    setPreset: setPreset,
+    addTestAnnotations: function () {
+      if (!state.img) return;
+      var W = state.img.width, H = state.img.height;
+      state.ann.push(
+        { type: "arrow", x1: W * 0.12, y1: H * 0.82, x2: W * 0.4, y2: H * 0.45, color: state.color, lw: 6 },
+        { type: "rect", x: W * 0.55, y: H * 0.12, w: W * 0.32, h: H * 0.24, color: state.color, lw: 3 },
+        { type: "pen", color: state.color, lw: 3,
+          pts: [[W * 0.1, H * 0.2], [W * 0.15, H * 0.14], [W * 0.2, H * 0.22], [W * 0.25, H * 0.15]] },
+        { type: "text", text: "Reviewed", x: W * 0.1, y: H * 0.05, color: state.color, size: 26 },
+        { type: "blur", x: W * 0.25, y: H * 0.55, w: W * 0.3, h: H * 0.2 }
+      );
+      invalidate();
+      render();
+    },
+    exportDataUrl: function (scale) {
+      if (!state.img) return null;
+      return exportCanvas(scale || 1).toDataURL("image/png");
+    },
+    state: state,
+    canvas: view
+  };
+})();
+</script>
+</body>
+</html>
